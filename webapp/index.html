@@ -2,198 +2,358 @@
 <html lang="ru">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>AdaptLink Support Mini App</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
       :root {
-        color-scheme: light dark;
-        --bg: #f4f6fb;
-        --card: #ffffff;
-        --text: #1f2937;
-        --muted: #6b7280;
+        color-scheme: dark;
+        --bg: #0a1531;
+        --bg-soft: #122142;
+        --card: #162847;
+        --card-2: #1a2e50;
+        --text: #e7edf9;
+        --muted: #9cb0d4;
         --accent: #2aabee;
+        --border: #2a416a;
         --danger: #ef4444;
         --success: #22c55e;
-        --border: #e5e7eb;
       }
-      @media (prefers-color-scheme: dark) {
-        :root {
-          --bg: #0f172a;
-          --card: #1e293b;
-          --text: #f8fafc;
-          --muted: #94a3b8;
-          --border: #334155;
-        }
-      }
+
       * {
         box-sizing: border-box;
       }
+
       body {
         margin: 0;
+        min-height: 100vh;
         font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-        background: var(--bg);
+        background: radial-gradient(1200px 500px at 50% -200px, #1b2f59 0%, var(--bg) 55%, #091126 100%);
         color: var(--text);
       }
+
+      body.no-scroll {
+        overflow: hidden;
+      }
+
       .app {
-        max-width: 860px;
+        width: min(100%, 460px);
         margin: 0 auto;
-        padding: 14px;
+        padding: 12px 12px calc(90px + env(safe-area-inset-bottom, 0px));
         display: grid;
         gap: 10px;
       }
+
       .card {
-        background: var(--card);
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01));
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 12px;
+        backdrop-filter: blur(4px);
+      }
+
+      .title {
+        margin: 0;
+        font-size: 30px;
+        font-weight: 800;
+        line-height: 1;
+      }
+
+      .subtitle {
+        margin: 4px 0 0;
+        color: var(--muted);
+      }
+
+      .top-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 10px;
+      }
+
+      .badge {
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        padding: 4px 10px;
+        font-size: 12px;
+        color: #b9c9ea;
+        background: var(--card-2);
+      }
+
+      .grid {
+        display: grid;
+        gap: 8px;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .kpi {
+        background: var(--card-2);
         border: 1px solid var(--border);
         border-radius: 14px;
-        padding: 12px;
+        padding: 10px;
       }
+
+      .kpi-label {
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .kpi-value {
+        font-size: 28px;
+        font-weight: 800;
+        margin-top: 3px;
+      }
+
+      .field,
+      .btn {
+        width: 100%;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        font: inherit;
+      }
+
+      .field {
+        background: #122749;
+        color: var(--text);
+        padding: 11px 12px;
+      }
+
+      .field::placeholder {
+        color: #7f94b9;
+      }
+
+      textarea.field {
+        min-height: 106px;
+        resize: vertical;
+      }
+
+      .btn {
+        background: #20365f;
+        color: #dbe7fb;
+        cursor: pointer;
+        padding: 10px 12px;
+      }
+
+      .btn-primary {
+        border: none;
+        background: linear-gradient(180deg, #37b9ff, var(--accent));
+        color: #fff;
+        font-weight: 700;
+      }
+
+      .btn-danger {
+        border: none;
+        background: var(--danger);
+        color: #fff;
+      }
+
+      .btn-success {
+        border: none;
+        background: var(--success);
+        color: #06220f;
+        font-weight: 700;
+      }
+
+      .item {
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 10px;
+        background: rgba(255, 255, 255, 0.02);
+        display: grid;
+        gap: 8px;
+      }
+
       .row {
         display: flex;
         gap: 8px;
         align-items: center;
         flex-wrap: wrap;
       }
-      .tabs {
-        display: flex;
-        gap: 8px;
-        overflow-x: auto;
-        padding-bottom: 2px;
+
+      .spaced {
+        justify-content: space-between;
       }
-      .tab {
-        border: 1px solid var(--border);
-        border-radius: 999px;
-        padding: 7px 12px;
-        background: transparent;
-        color: var(--text);
-        white-space: nowrap;
-      }
-      .tab.active {
-        background: var(--accent);
-        color: #fff;
-        border-color: transparent;
-      }
-      .grid {
-        display: grid;
-        gap: 10px;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-      input,
-      textarea,
-      button {
-        width: 100%;
-        border: 1px solid var(--border);
-        border-radius: 10px;
-        background: var(--card);
-        color: var(--text);
-        font: inherit;
-      }
-      input,
-      textarea {
-        padding: 10px;
-      }
-      textarea {
-        min-height: 90px;
-        resize: vertical;
-      }
-      button {
-        padding: 10px;
-        cursor: pointer;
-      }
-      .primary {
-        background: var(--accent);
-        color: #fff;
-        border: none;
-      }
-      .danger {
-        background: var(--danger);
-        color: #fff;
-        border: none;
-      }
-      .success {
-        background: var(--success);
-        color: #fff;
-        border: none;
-      }
+
       .muted {
         color: var(--muted);
       }
-      .item {
-        border: 1px solid var(--border);
-        border-radius: 10px;
-        padding: 10px;
-        display: grid;
-        gap: 8px;
-      }
-      .badge {
-        padding: 3px 8px;
+
+      .status-chip {
         border-radius: 999px;
-        border: 1px solid var(--border);
-        font-size: 12px;
+        padding: 4px 10px;
+        font-size: 11px;
+        font-weight: 700;
+        border: 1px solid transparent;
       }
-      #chat-messages {
-        max-height: 260px;
-        overflow: auto;
+
+      .status-chip.new {
+        color: #98ebff;
+        background: rgba(42, 171, 238, 0.16);
+        border-color: rgba(42, 171, 238, 0.3);
+      }
+
+      .status-chip.in-progress {
+        color: #ffe5a0;
+        background: rgba(234, 179, 8, 0.14);
+        border-color: rgba(234, 179, 8, 0.3);
+      }
+
+      .status-chip.completed {
+        color: #b0fbc9;
+        background: rgba(34, 197, 94, 0.14);
+        border-color: rgba(34, 197, 94, 0.3);
+      }
+
+      #status {
+        margin: 0;
+        min-height: 18px;
+      }
+
+      .bottom-nav {
+        position: fixed;
+        left: 50%;
+        transform: translateX(-50%);
+        bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+        width: min(100vw - 12px, 436px);
+        background: rgba(12, 26, 51, 0.92);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 7px;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(64px, 1fr));
+        gap: 6px;
+        z-index: 30;
+      }
+
+      .bottom-tab {
+        border: none;
+        border-radius: 12px;
+        padding: 6px 4px;
+        background: transparent;
+        color: #9ab0d5;
+        display: grid;
+        justify-items: center;
+        gap: 2px;
+        cursor: pointer;
+      }
+
+      .bottom-tab.active {
+        background: rgba(42, 171, 238, 0.2);
+        color: #d9f3ff;
+      }
+
+      .bottom-tab-icon {
+        font-size: 18px;
+        line-height: 1;
+      }
+
+      .bottom-tab-label {
+        font-size: 10px;
+      }
+
+      .chat-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 60;
+        background: rgba(8, 15, 31, 0.96);
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+        width: min(100vw, 460px);
+        margin: 0 auto;
+        border-left: 1px solid var(--border);
+        border-right: 1px solid var(--border);
+      }
+
+      .chat-header {
+        padding: 12px;
+        border-bottom: 1px solid var(--border);
+        background: #102240;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .chat-body {
+        padding: 12px;
+        overflow-y: auto;
         display: grid;
         gap: 8px;
       }
-      .msg {
+
+      .chat-msg {
         border: 1px solid var(--border);
-        border-radius: 10px;
-        padding: 8px;
+        border-radius: 12px;
+        padding: 8px 10px;
+        background: #122749;
       }
-      .msg.admin {
-        border-color: var(--accent);
+
+      .chat-msg.admin {
+        border-color: rgba(42, 171, 238, 0.5);
       }
+
+      .chat-footer {
+        padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+        border-top: 1px solid var(--border);
+        display: grid;
+        gap: 8px;
+      }
+
+      .chat-input-row {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 8px;
+      }
+
       .hidden {
-        display: none;
+        display: none !important;
       }
     </style>
   </head>
   <body>
     <main class="app">
       <section class="card">
-        <div class="row" style="justify-content: space-between">
+        <div class="top-row">
           <div>
-            <h1 style="margin: 0; font-size: 22px">AdaptLink Support</h1>
-            <p class="muted" id="whoami">Загрузка профиля...</p>
+            <h1 class="title">AdaptLink Support</h1>
+            <p class="subtitle" id="whoami">Загрузка профиля...</p>
           </div>
           <span class="badge" id="role-badge">-</span>
         </div>
       </section>
 
       <section id="register-card" class="card hidden">
-        <h2 style="margin: 0 0 8px; font-size: 18px">Регистрация</h2>
-        <div class="grid">
-          <input id="reg-name" placeholder="ФИО" />
-          <input id="reg-org" placeholder="Организация" />
-        </div>
-        <div style="margin-top: 8px">
-          <button id="register-btn" class="primary">Зарегистрироваться</button>
+        <h2 style="margin: 0 0 10px">Регистрация</h2>
+        <div style="display: grid; gap: 8px">
+          <input class="field" id="reg-name" placeholder="ФИО" />
+          <input class="field" id="reg-org" placeholder="Организация" />
+          <button id="register-btn" class="btn btn-primary">Зарегистрироваться</button>
         </div>
       </section>
 
       <section id="main-card" class="card hidden">
-        <div id="tabs" class="tabs"></div>
-        <div id="content" style="margin-top: 10px"></div>
-      </section>
-
-      <section id="chat-card" class="card hidden">
-        <div class="row" style="justify-content: space-between">
-          <h3 id="chat-title" style="margin: 0; font-size: 16px">Диалог</h3>
-          <button id="chat-close" style="width: auto">Закрыть</button>
-        </div>
-        <div id="chat-messages" style="margin: 10px 0"></div>
-        <div class="row">
-          <input id="chat-input" placeholder="Введите сообщение..." />
-          <button id="chat-send" class="primary" style="width: auto">Отправить</button>
-        </div>
+        <div id="content"></div>
       </section>
 
       <section class="card">
         <p id="status" class="muted">Готово.</p>
       </section>
     </main>
+
+    <nav id="tabs" class="bottom-nav hidden"></nav>
+
+    <section id="chat-card" class="chat-overlay hidden">
+      <div class="chat-header">
+        <strong id="chat-title">Диалог</strong>
+        <button id="chat-close" class="btn" style="width: auto">Закрыть</button>
+      </div>
+      <div id="chat-messages" class="chat-body"></div>
+      <div class="chat-footer">
+        <div class="chat-input-row">
+          <input id="chat-input" class="field" placeholder="Введите сообщение..." />
+          <button id="chat-send" class="btn btn-primary" style="width: auto">Отправить</button>
+        </div>
+      </div>
+    </section>
 
     <script>
       const tg = window.Telegram?.WebApp || null;
@@ -219,11 +379,43 @@
       const chatMessages = document.getElementById("chat-messages");
       const chatInput = document.getElementById("chat-input");
 
+      const tabIcons = {
+        new: "🏠",
+        mine: "📋",
+        suggestions: "💡",
+        instructions: "📚",
+        inprogress: "🛠️",
+        completed: "✅"
+      };
+
       const state = {
         bootstrap: null,
         activeTab: "",
         activeChatRequestId: null
       };
+
+      function escapeHtml(value) {
+        return String(value || "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#039;");
+      }
+
+      function formatDate(value) {
+        try {
+          return new Date(value).toLocaleString();
+        } catch {
+          return value;
+        }
+      }
+
+      function statusChipClass(status) {
+        if (status === "IN_PROGRESS") return "in-progress";
+        if (status === "COMPLETED") return "completed";
+        return "new";
+      }
 
       function setStatus(message) {
         statusEl.textContent = message;
@@ -233,6 +425,7 @@
         if (!apiBase) {
           throw new Error("API URL не задан. Откройте Mini App через кнопку бота.");
         }
+
         const response = await fetch(`${apiBase}${path}`, {
           method: options.method || "GET",
           headers: {
@@ -241,10 +434,12 @@
           },
           body: options.body ? JSON.stringify(options.body) : undefined
         });
+
         if (!response.ok) {
           const body = await response.json().catch(() => ({}));
           throw new Error(body.error || `HTTP ${response.status}`);
         }
+
         return response.json();
       }
 
@@ -253,8 +448,11 @@
         tabs.forEach((tab) => {
           const button = document.createElement("button");
           button.type = "button";
-          button.className = `tab ${state.activeTab === tab.id ? "active" : ""}`;
-          button.textContent = tab.title;
+          button.className = `bottom-tab ${state.activeTab === tab.id ? "active" : ""}`;
+          button.innerHTML = `
+            <span class="bottom-tab-icon">${tabIcons[tab.id] || "•"}</span>
+            <span class="bottom-tab-label">${escapeHtml(tab.title)}</span>
+          `;
           button.onclick = () => {
             state.activeTab = tab.id;
             renderApp();
@@ -266,10 +464,10 @@
       function renderUserView() {
         const payload = state.bootstrap;
         const tabs = [
-          { id: "new", title: "Новая заявка" },
-          { id: "mine", title: "Мои заявки" },
-          { id: "suggestions", title: "Предложения" },
-          { id: "instructions", title: "Инструкции" }
+          { id: "new", title: "Главная" },
+          { id: "mine", title: "Заявки" },
+          { id: "suggestions", title: "Идеи" },
+          { id: "instructions", title: "Инстр." }
         ];
         if (!state.activeTab) state.activeTab = "new";
         renderTabs(tabs);
@@ -277,20 +475,22 @@
         if (state.activeTab === "new") {
           contentEl.innerHTML = `
             <div class="grid">
-              <div class="item">
-                <div class="muted">Открытые</div>
-                <strong>${payload.stats?.open || 0}</strong>
+              <div class="kpi">
+                <div class="kpi-label">Открытые заявки</div>
+                <div class="kpi-value">${payload.stats?.open || 0}</div>
               </div>
-              <div class="item">
-                <div class="muted">В работе</div>
-                <strong>${payload.stats?.inProgress || 0}</strong>
+              <div class="kpi">
+                <div class="kpi-label">В работе</div>
+                <div class="kpi-value">${payload.stats?.inProgress || 0}</div>
               </div>
             </div>
             <div class="item" style="margin-top:10px">
-              <textarea id="request-text" placeholder="Опишите заявку"></textarea>
-              <button id="request-submit" class="primary">Отправить заявку</button>
+              <strong>Новая заявка</strong>
+              <textarea id="request-text" class="field" placeholder="Опишите проблему и шаги воспроизведения"></textarea>
+              <button id="request-submit" class="btn btn-primary">Отправить заявку</button>
             </div>
           `;
+
           document.getElementById("request-submit").onclick = async () => {
             const text = document.getElementById("request-text").value.trim();
             if (!text) return setStatus("Заполните текст заявки.");
@@ -305,21 +505,23 @@
           const rows = (payload.requests || [])
             .map(
               (request) => `
-              <div class="item">
-                <div class="row" style="justify-content:space-between">
-                  <strong>#${request.id}</strong>
-                  <span class="badge">${request.status}</span>
+                <div class="item">
+                  <div class="row spaced">
+                    <strong>#${request.id}</strong>
+                    <span class="status-chip ${statusChipClass(request.status)}">${request.status}</span>
+                  </div>
+                  <div>${escapeHtml(request.text)}</div>
+                  <div class="muted">${formatDate(request.createdAt)}</div>
+                  ${
+                    request.status === "IN_PROGRESS"
+                      ? `<button class="btn btn-primary" data-open-chat="${request.id}">Открыть диалог</button>`
+                      : ""
+                  }
                 </div>
-                <div>${request.text}</div>
-                ${
-                  request.status === "IN_PROGRESS"
-                    ? `<button class="primary" data-open-chat="${request.id}">Открыть диалог</button>`
-                    : ""
-                }
-              </div>
-            `
+              `
             )
             .join("");
+
           contentEl.innerHTML = rows || `<p class="muted">Пока нет заявок.</p>`;
           contentEl.querySelectorAll("[data-open-chat]").forEach((button) => {
             button.onclick = () => openChat(Number(button.dataset.openChat));
@@ -330,8 +532,9 @@
         if (state.activeTab === "suggestions") {
           contentEl.innerHTML = `
             <div class="item">
-              <textarea id="suggestion-text" placeholder="Ваше предложение по доработке"></textarea>
-              <button id="suggestion-submit" class="primary">Отправить предложение</button>
+              <strong>Предложения по доработке</strong>
+              <textarea id="suggestion-text" class="field" placeholder="Опишите вашу идею"></textarea>
+              <button id="suggestion-submit" class="btn btn-primary">Отправить предложение</button>
             </div>
           `;
           document.getElementById("suggestion-submit").onclick = async () => {
@@ -346,8 +549,11 @@
         if (state.activeTab === "instructions") {
           const links = (payload.instructions || [])
             .map(
-              (item) =>
-                `<button data-open-instruction="${item.url}" style="text-align:left">${item.title}</button>`
+              (item) => `
+                <button class="btn" data-open-instruction="${item.url}" style="text-align:left">
+                  ${escapeHtml(item.title)}
+                </button>
+              `
             )
             .join("");
           contentEl.innerHTML = links || `<p class="muted">Инструкции недоступны.</p>`;
@@ -362,9 +568,9 @@
         const tabs = [
           { id: "new", title: "Новые" },
           { id: "inprogress", title: "В работе" },
-          { id: "completed", title: "Завершенные" },
-          { id: "suggestions", title: "Предложения" },
-          { id: "instructions", title: "Инструкции" }
+          { id: "completed", title: "Готово" },
+          { id: "suggestions", title: "Идеи" },
+          { id: "instructions", title: "Инстр." }
         ];
         if (!state.activeTab) state.activeTab = "new";
         renderTabs(tabs);
@@ -374,35 +580,38 @@
           inprogress: payload.requests?.inProgress || [],
           completed: payload.requests?.completed || []
         };
+
         if (["new", "inprogress", "completed"].includes(state.activeTab)) {
           const list = requestsMap[state.activeTab]
             .map(
               (request) => `
-              <div class="item">
-                <div class="row" style="justify-content:space-between">
-                  <strong>#${request.id}</strong>
-                  <span class="badge">${request.status}</span>
+                <div class="item">
+                  <div class="row spaced">
+                    <strong>#${request.id}</strong>
+                    <span class="status-chip ${statusChipClass(request.status)}">${request.status}</span>
+                  </div>
+                  <div>${escapeHtml(request.text)}</div>
+                  <div class="muted">Пользователь: ${request.userTelegramId}</div>
+                  <div class="row">
+                    ${
+                      request.status === "NEW"
+                        ? `<button class="btn btn-success" data-take="${request.id}">Принять</button>`
+                        : ""
+                    }
+                    ${
+                      request.status === "IN_PROGRESS"
+                        ? `<button class="btn btn-primary" data-open-chat="${request.id}">Диалог</button>
+                           <button class="btn btn-danger" data-finish="${request.id}">Завершить</button>`
+                        : ""
+                    }
+                  </div>
                 </div>
-                <div>${request.text}</div>
-                <div class="muted">Пользователь: ${request.userTelegramId}</div>
-                <div class="row">
-                  ${
-                    request.status === "NEW"
-                      ? `<button class="success" data-take="${request.id}">Принять в работу</button>`
-                      : ""
-                  }
-                  ${
-                    request.status === "IN_PROGRESS"
-                      ? `<button class="primary" data-open-chat="${request.id}">Открыть диалог</button>
-                         <button class="danger" data-finish="${request.id}">Завершить</button>`
-                      : ""
-                  }
-                </div>
-              </div>
-            `
+              `
             )
             .join("");
+
           contentEl.innerHTML = list || `<p class="muted">Пусто.</p>`;
+
           contentEl.querySelectorAll("[data-take]").forEach((button) => {
             button.onclick = async () => {
               await api(`/api/requests/${button.dataset.take}/take`, { method: "POST" });
@@ -410,6 +619,7 @@
               await loadBootstrap();
             };
           });
+
           contentEl.querySelectorAll("[data-finish]").forEach((button) => {
             button.onclick = async () => {
               await api(`/api/requests/${button.dataset.finish}/finish`, { method: "POST" });
@@ -417,6 +627,7 @@
               await loadBootstrap();
             };
           });
+
           contentEl.querySelectorAll("[data-open-chat]").forEach((button) => {
             button.onclick = () => openChat(Number(button.dataset.openChat));
           });
@@ -427,12 +638,14 @@
           const rows = (payload.suggestions || [])
             .map(
               (item) => `
-              <div class="item">
-                <strong>#${item.id}</strong>
-                <div>${item.text}</div>
-                <div class="muted">${item.fullName || "не указано"} | ${item.organization || "не указана"}</div>
-              </div>
-            `
+                <div class="item">
+                  <strong>#${item.id}</strong>
+                  <div>${escapeHtml(item.text)}</div>
+                  <div class="muted">${escapeHtml(item.fullName || "не указано")} | ${escapeHtml(
+                    item.organization || "не указана"
+                  )}</div>
+                </div>
+              `
             )
             .join("");
           contentEl.innerHTML = rows || `<p class="muted">Пока нет предложений.</p>`;
@@ -442,8 +655,11 @@
         if (state.activeTab === "instructions") {
           const links = (payload.instructions || [])
             .map(
-              (item) =>
-                `<button data-open-instruction="${item.url}" style="text-align:left">${item.title}</button>`
+              (item) => `
+                <button class="btn" data-open-instruction="${item.url}" style="text-align:left">
+                  ${escapeHtml(item.title)}
+                </button>
+              `
             )
             .join("");
           contentEl.innerHTML = links || `<p class="muted">Инструкции недоступны.</p>`;
@@ -457,19 +673,21 @@
         const payload = await api(`/api/requests/${requestId}/messages`);
         state.activeChatRequestId = requestId;
         chatCard.classList.remove("hidden");
+        document.body.classList.add("no-scroll");
         chatTitle.textContent = `Диалог по заявке #${requestId}`;
         chatMessages.innerHTML =
           payload.messages
             .map(
               (message) => `
-              <div class="msg ${message.senderRole === "ADMIN" ? "admin" : ""}">
-                <strong>${message.senderRole === "ADMIN" ? "Админ" : "Пользователь"}</strong>
-                <div>${message.text}</div>
-                <div class="muted">${new Date(message.createdAt).toLocaleString()}</div>
-              </div>
-            `
+                <div class="chat-msg ${message.senderRole === "ADMIN" ? "admin" : ""}">
+                  <strong>${message.senderRole === "ADMIN" ? "Админ" : "Пользователь"}</strong>
+                  <div>${escapeHtml(message.text)}</div>
+                  <div class="muted">${formatDate(message.createdAt)}</div>
+                </div>
+              `
             )
             .join("") || `<p class="muted">Сообщений пока нет.</p>`;
+        chatMessages.scrollTop = chatMessages.scrollHeight;
       }
 
       async function sendChatMessage() {
@@ -490,6 +708,7 @@
           setStatus("Ошибка авторизации Mini App.");
           return;
         }
+
         const payload = await api(`/api/bootstrap?telegramId=${telegramId}`);
         state.bootstrap = payload;
         whoamiEl.textContent = payload.registered
@@ -499,9 +718,9 @@
 
         registerCard.classList.toggle("hidden", payload.registered);
         mainCard.classList.toggle("hidden", !payload.registered);
-        if (!payload.registered) {
-          return;
-        }
+        tabsEl.classList.toggle("hidden", !payload.registered);
+        if (!payload.registered) return;
+
         renderApp();
       }
 
@@ -521,6 +740,7 @@
           setStatus("Заполните ФИО и организацию.");
           return;
         }
+
         await api("/api/register", {
           method: "POST",
           body: {
@@ -532,6 +752,7 @@
             lastName: tgUser?.last_name || null
           }
         });
+
         state.activeTab = "";
         setStatus("Регистрация выполнена.");
         await loadBootstrap();
@@ -541,6 +762,7 @@
       document.getElementById("chat-close").onclick = () => {
         state.activeChatRequestId = null;
         chatCard.classList.add("hidden");
+        document.body.classList.remove("no-scroll");
       };
 
       chatInput.addEventListener("keydown", (event) => {
