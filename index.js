@@ -4,7 +4,6 @@ const { Telegraf, Markup } = require("telegraf");
 require("dotenv").config();
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
-const ADMIN_REG_PASSWORD = "admin";
 
 if (!BOT_TOKEN) {
   console.error("BOT_TOKEN not found. Create .env and set BOT_TOKEN=...");
@@ -218,13 +217,6 @@ function findUserActiveRequest(userTelegramId) {
   return inProgress[inProgress.length - 1];
 }
 
-function roleKeyboard() {
-  return Markup.inlineKeyboard([
-    [Markup.button.callback("Пользователь", "register:USER")],
-    [Markup.button.callback("Админ", "register:ADMIN")]
-  ]);
-}
-
 function unregisteredKeyboard() {
   return Markup.keyboard([[START_REGISTRATION_BUTTON]]).resize();
 }
@@ -393,32 +385,6 @@ bot.start(async (ctx) => {
     "Добро пожаловать! Для начала нажмите кнопку Регистрация.",
     unregisteredKeyboard()
   );
-});
-
-bot.action("register:USER", async (ctx) => {
-  await ctx.answerCbQuery();
-
-  const existing = findUser(ctx.from.id);
-  if (existing) {
-    await ctx.reply("Вы уже зарегистрированы.");
-    return;
-  }
-
-  registrationSessions.set(ctx.from.id, { step: "WAITING_USER_FULL_NAME" });
-  await ctx.reply("Введите ваше ФИО:");
-});
-
-bot.action("register:ADMIN", async (ctx) => {
-  await ctx.answerCbQuery();
-
-  const existing = findUser(ctx.from.id);
-  if (existing) {
-    await ctx.reply("Вы уже зарегистрированы.");
-    return;
-  }
-
-  registrationSessions.set(ctx.from.id, { step: "WAITING_ADMIN_PASSWORD" });
-  await ctx.reply("Введите пароль администратора:");
 });
 
 bot.action("instructions:settings", async (ctx) => {
@@ -832,7 +798,8 @@ bot.on("text", async (ctx) => {
   const text = ctx.message.text.trim();
 
   if ((!session || !session.step) && text === START_REGISTRATION_BUTTON) {
-    await ctx.reply("Выберите роль для регистрации:", roleKeyboard());
+    registrationSessions.set(ctx.from.id, { step: "WAITING_USER_FULL_NAME" });
+    await ctx.reply("Введите ваше ФИО:");
     return;
   }
 
@@ -879,21 +846,7 @@ bot.on("text", async (ctx) => {
     return;
   }
 
-  if (session.step !== "WAITING_ADMIN_PASSWORD") {
-    await ctx.reply("Для начала регистрации используйте команду /start.");
-    return;
-  }
-
-  const password = text;
-  if (password !== ADMIN_REG_PASSWORD) {
-    await ctx.reply("Неверный пароль администратора. Попробуйте еще раз.");
-    return;
-  }
-
-  registerUser(ctx.from, "ADMIN");
-  registrationSessions.delete(ctx.from.id);
-  await ctx.reply("Регистрация завершена. Ваша роль: Админ.");
-  await ctx.reply("Меню администратора:", adminMenuKeyboard());
+  await ctx.reply("Для начала регистрации используйте команду /start.");
 });
 
 bot.launch().then(() => {
