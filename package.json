@@ -1,0 +1,20 @@
+{
+  "name": "bot_tg",
+  "version": "1.0.0",
+  "description": "Telegram bot with first-login registration and roles",
+  "main": "index.js",
+  "scripts": {
+    "start": "node --watch index.js"
+  },
+  "keywords": [
+    "telegram",
+    "bot",
+    "telegraf"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "telegraf": "^4.16.3"
+  }
+}

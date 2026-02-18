@@ -1,0 +1,22 @@
+[
+  {
+    "telegramId": 313283588,
+    "username": "sharlay_vlad",
+    "firstName": "Vlad",
+    "lastName": "Sharlay",
+    "role": "ADMIN",
+    "fullName": null,
+    "organization": null,
+    "registeredAt": "2026-02-13T09:19:09.833Z"
+  },
+  {
+    "telegramId": 7336671411,
+    "username": "devopsgood",
+    "firstName": "Сергей",
+    "lastName": null,
+    "role": "ADMIN",
+    "fullName": null,
+    "organization": null,
+    "registeredAt": "2026-02-13T09:34:48.261Z"
+  }
+]

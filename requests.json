@@ -1,0 +1,28 @@
+[
+  {
+    "id": 1,
+    "userTelegramId": 7336671411,
+    "userUsername": "devopsgood",
+    "userFirstName": "Сергей",
+    "userLastName": null,
+    "text": "Тест",
+    "status": "COMPLETED",
+    "createdAt": "2026-02-13T08:32:02.048Z",
+    "inProgressAt": "2026-02-13T08:32:15.759Z",
+    "completedAt": "2026-02-13T08:39:48.446Z",
+    "assignedAdminTelegramId": 313283588
+  },
+  {
+    "id": 2,
+    "userTelegramId": 884144992,
+    "userUsername": "mkhn_01",
+    "userFirstName": "Наташа",
+    "userLastName": null,
+    "text": "Лшвлаьктадс",
+    "status": "COMPLETED",
+    "createdAt": "2026-02-13T10:17:04.348Z",
+    "inProgressAt": "2026-02-13T10:17:34.134Z",
+    "completedAt": "2026-02-13T10:21:42.256Z",
+    "assignedAdminTelegramId": 313283588
+  }
+]
