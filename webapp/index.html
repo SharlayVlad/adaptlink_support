@@ -13,184 +13,546 @@
         --text: #1f2937;
         --muted: #6b7280;
         --accent: #2aabee;
-        --accent-text: #ffffff;
+        --danger: #ef4444;
+        --success: #22c55e;
         --border: #e5e7eb;
       }
-
       @media (prefers-color-scheme: dark) {
         :root {
-          --bg: #111827;
-          --card: #1f2937;
-          --text: #f3f4f6;
-          --muted: #9ca3af;
-          --border: #374151;
+          --bg: #0f172a;
+          --card: #1e293b;
+          --text: #f8fafc;
+          --muted: #94a3b8;
+          --border: #334155;
         }
       }
-
       * {
         box-sizing: border-box;
       }
-
       body {
         margin: 0;
         font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
         background: var(--bg);
         color: var(--text);
       }
-
       .app {
-        max-width: 760px;
+        max-width: 860px;
         margin: 0 auto;
-        padding: 16px;
+        padding: 14px;
         display: grid;
-        gap: 12px;
+        gap: 10px;
       }
-
       .card {
         background: var(--card);
         border: 1px solid var(--border);
         border-radius: 14px;
-        padding: 14px;
+        padding: 12px;
       }
-
-      h1 {
-        margin: 0 0 6px;
-        font-size: 22px;
+      .row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
       }
-
-      p {
-        margin: 0;
+      .tabs {
+        display: flex;
+        gap: 8px;
+        overflow-x: auto;
+        padding-bottom: 2px;
       }
-
-      .muted {
-        color: var(--muted);
+      .tab {
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        padding: 7px 12px;
+        background: transparent;
+        color: var(--text);
+        white-space: nowrap;
       }
-
+      .tab.active {
+        background: var(--accent);
+        color: #fff;
+        border-color: transparent;
+      }
       .grid {
         display: grid;
         gap: 10px;
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
-
-      .kpi {
-        font-size: 14px;
-      }
-
-      .kpi strong {
-        display: block;
-        margin-top: 4px;
-        font-size: 22px;
-      }
-
       input,
       textarea,
-      select,
       button {
         width: 100%;
-        border-radius: 10px;
         border: 1px solid var(--border);
+        border-radius: 10px;
         background: var(--card);
         color: var(--text);
         font: inherit;
       }
-
       input,
-      textarea,
-      select {
-        padding: 10px 12px;
-      }
-
       textarea {
-        min-height: 100px;
+        padding: 10px;
+      }
+      textarea {
+        min-height: 90px;
         resize: vertical;
       }
-
       button {
-        padding: 11px 14px;
-        background: var(--accent);
-        color: var(--accent-text);
-        border: none;
+        padding: 10px;
         cursor: pointer;
       }
-
-      .stack {
+      .primary {
+        background: var(--accent);
+        color: #fff;
+        border: none;
+      }
+      .danger {
+        background: var(--danger);
+        color: #fff;
+        border: none;
+      }
+      .success {
+        background: var(--success);
+        color: #fff;
+        border: none;
+      }
+      .muted {
+        color: var(--muted);
+      }
+      .item {
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 10px;
         display: grid;
         gap: 8px;
+      }
+      .badge {
+        padding: 3px 8px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        font-size: 12px;
+      }
+      #chat-messages {
+        max-height: 260px;
+        overflow: auto;
+        display: grid;
+        gap: 8px;
+      }
+      .msg {
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 8px;
+      }
+      .msg.admin {
+        border-color: var(--accent);
+      }
+      .hidden {
+        display: none;
       }
     </style>
   </head>
   <body>
     <main class="app">
       <section class="card">
-        <h1>AdaptLink Support</h1>
-        <p class="muted">Mini App для пользователей Telegram-бота.</p>
-      </section>
-
-      <section class="card grid">
-        <div class="kpi">
-          Открытые заявки
-          <strong id="open-count">0</strong>
-        </div>
-        <div class="kpi">
-          В работе
-          <strong id="work-count">0</strong>
+        <div class="row" style="justify-content: space-between">
+          <div>
+            <h1 style="margin: 0; font-size: 22px">AdaptLink Support</h1>
+            <p class="muted" id="whoami">Загрузка профиля...</p>
+          </div>
+          <span class="badge" id="role-badge">-</span>
         </div>
       </section>
 
-      <section class="card stack">
-        <h2 style="margin: 0; font-size: 18px">Новая заявка</h2>
-        <label>
-          Тема
-          <input id="topic" placeholder="Кратко опишите проблему" />
-        </label>
-        <label>
-          Описание
-          <textarea id="details" placeholder="Детально опишите проблему"></textarea>
-        </label>
-        <label>
-          Приоритет
-          <select id="priority">
-            <option>Низкий</option>
-            <option selected>Средний</option>
-            <option>Высокий</option>
-          </select>
-        </label>
-        <button id="send-btn" type="button">Отправить заявку</button>
-        <p id="status" class="muted">Статус: готово к подключению API.</p>
+      <section id="register-card" class="card hidden">
+        <h2 style="margin: 0 0 8px; font-size: 18px">Регистрация</h2>
+        <div class="grid">
+          <input id="reg-name" placeholder="ФИО" />
+          <input id="reg-org" placeholder="Организация" />
+        </div>
+        <div style="margin-top: 8px">
+          <button id="register-btn" class="primary">Зарегистрироваться</button>
+        </div>
+      </section>
+
+      <section id="main-card" class="card hidden">
+        <div id="tabs" class="tabs"></div>
+        <div id="content" style="margin-top: 10px"></div>
+      </section>
+
+      <section id="chat-card" class="card hidden">
+        <div class="row" style="justify-content: space-between">
+          <h3 id="chat-title" style="margin: 0; font-size: 16px">Диалог</h3>
+          <button id="chat-close" style="width: auto">Закрыть</button>
+        </div>
+        <div id="chat-messages" style="margin: 10px 0"></div>
+        <div class="row">
+          <input id="chat-input" placeholder="Введите сообщение..." />
+          <button id="chat-send" class="primary" style="width: auto">Отправить</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <p id="status" class="muted">Готово.</p>
       </section>
     </main>
 
     <script>
-      const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+      const tg = window.Telegram?.WebApp || null;
       if (tg) {
         tg.ready();
         tg.expand();
       }
 
-      const openCountEl = document.getElementById("open-count");
-      const workCountEl = document.getElementById("work-count");
+      const params = new URLSearchParams(location.search);
+      const apiBase = (params.get("api") || "").replace(/\/+$/, "");
+      const tgUser = tg?.initDataUnsafe?.user || null;
+      const fallbackTelegramId = Number(params.get("telegramId")) || null;
+      const telegramId = tgUser?.id || fallbackTelegramId;
+      const whoamiEl = document.getElementById("whoami");
+      const roleBadgeEl = document.getElementById("role-badge");
       const statusEl = document.getElementById("status");
-      const sendBtn = document.getElementById("send-btn");
+      const registerCard = document.getElementById("register-card");
+      const mainCard = document.getElementById("main-card");
+      const tabsEl = document.getElementById("tabs");
+      const contentEl = document.getElementById("content");
+      const chatCard = document.getElementById("chat-card");
+      const chatTitle = document.getElementById("chat-title");
+      const chatMessages = document.getElementById("chat-messages");
+      const chatInput = document.getElementById("chat-input");
 
-      // Demo data until backend API is connected.
-      openCountEl.textContent = "2";
-      workCountEl.textContent = "1";
+      const state = {
+        bootstrap: null,
+        activeTab: "",
+        activeChatRequestId: null
+      };
 
-      sendBtn.addEventListener("click", () => {
-        const topic = document.getElementById("topic").value.trim();
-        const details = document.getElementById("details").value.trim();
-        const priority = document.getElementById("priority").value;
+      function setStatus(message) {
+        statusEl.textContent = message;
+      }
 
-        if (!topic || !details) {
-          statusEl.textContent = "Заполните тему и описание.";
+      async function api(path, options = {}) {
+        if (!apiBase) {
+          throw new Error("API URL не задан. Откройте Mini App через кнопку бота.");
+        }
+        const response = await fetch(`${apiBase}${path}`, {
+          method: options.method || "GET",
+          headers: {
+            "Content-Type": "application/json",
+            "x-telegram-id": String(telegramId)
+          },
+          body: options.body ? JSON.stringify(options.body) : undefined
+        });
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({}));
+          throw new Error(body.error || `HTTP ${response.status}`);
+        }
+        return response.json();
+      }
+
+      function renderTabs(tabs) {
+        tabsEl.innerHTML = "";
+        tabs.forEach((tab) => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = `tab ${state.activeTab === tab.id ? "active" : ""}`;
+          button.textContent = tab.title;
+          button.onclick = () => {
+            state.activeTab = tab.id;
+            renderApp();
+          };
+          tabsEl.appendChild(button);
+        });
+      }
+
+      function renderUserView() {
+        const payload = state.bootstrap;
+        const tabs = [
+          { id: "new", title: "Новая заявка" },
+          { id: "mine", title: "Мои заявки" },
+          { id: "suggestions", title: "Предложения" },
+          { id: "instructions", title: "Инструкции" }
+        ];
+        if (!state.activeTab) state.activeTab = "new";
+        renderTabs(tabs);
+
+        if (state.activeTab === "new") {
+          contentEl.innerHTML = `
+            <div class="grid">
+              <div class="item">
+                <div class="muted">Открытые</div>
+                <strong>${payload.stats?.open || 0}</strong>
+              </div>
+              <div class="item">
+                <div class="muted">В работе</div>
+                <strong>${payload.stats?.inProgress || 0}</strong>
+              </div>
+            </div>
+            <div class="item" style="margin-top:10px">
+              <textarea id="request-text" placeholder="Опишите заявку"></textarea>
+              <button id="request-submit" class="primary">Отправить заявку</button>
+            </div>
+          `;
+          document.getElementById("request-submit").onclick = async () => {
+            const text = document.getElementById("request-text").value.trim();
+            if (!text) return setStatus("Заполните текст заявки.");
+            await api("/api/requests", { method: "POST", body: { text } });
+            setStatus("Заявка отправлена.");
+            await loadBootstrap();
+          };
           return;
         }
 
-        statusEl.textContent = `Черновик: ${topic} (${priority}). Подключим отправку на API на следующем шаге.`;
-
-        if (tg && typeof tg.showAlert === "function") {
-          tg.showAlert("Заявка сохранена как черновик в Mini App.");
+        if (state.activeTab === "mine") {
+          const rows = (payload.requests || [])
+            .map(
+              (request) => `
+              <div class="item">
+                <div class="row" style="justify-content:space-between">
+                  <strong>#${request.id}</strong>
+                  <span class="badge">${request.status}</span>
+                </div>
+                <div>${request.text}</div>
+                ${
+                  request.status === "IN_PROGRESS"
+                    ? `<button class="primary" data-open-chat="${request.id}">Открыть диалог</button>`
+                    : ""
+                }
+              </div>
+            `
+            )
+            .join("");
+          contentEl.innerHTML = rows || `<p class="muted">Пока нет заявок.</p>`;
+          contentEl.querySelectorAll("[data-open-chat]").forEach((button) => {
+            button.onclick = () => openChat(Number(button.dataset.openChat));
+          });
+          return;
         }
+
+        if (state.activeTab === "suggestions") {
+          contentEl.innerHTML = `
+            <div class="item">
+              <textarea id="suggestion-text" placeholder="Ваше предложение по доработке"></textarea>
+              <button id="suggestion-submit" class="primary">Отправить предложение</button>
+            </div>
+          `;
+          document.getElementById("suggestion-submit").onclick = async () => {
+            const text = document.getElementById("suggestion-text").value.trim();
+            if (!text) return setStatus("Заполните текст предложения.");
+            await api("/api/suggestions", { method: "POST", body: { text } });
+            setStatus("Предложение отправлено.");
+          };
+          return;
+        }
+
+        if (state.activeTab === "instructions") {
+          const links = (payload.instructions || [])
+            .map(
+              (item) =>
+                `<button data-open-instruction="${item.url}" style="text-align:left">${item.title}</button>`
+            )
+            .join("");
+          contentEl.innerHTML = links || `<p class="muted">Инструкции недоступны.</p>`;
+          contentEl.querySelectorAll("[data-open-instruction]").forEach((button) => {
+            button.onclick = () => window.open(`${apiBase}${button.dataset.openInstruction}`, "_blank");
+          });
+        }
+      }
+
+      function renderAdminView() {
+        const payload = state.bootstrap;
+        const tabs = [
+          { id: "new", title: "Новые" },
+          { id: "inprogress", title: "В работе" },
+          { id: "completed", title: "Завершенные" },
+          { id: "suggestions", title: "Предложения" },
+          { id: "instructions", title: "Инструкции" }
+        ];
+        if (!state.activeTab) state.activeTab = "new";
+        renderTabs(tabs);
+
+        const requestsMap = {
+          new: payload.requests?.new || [],
+          inprogress: payload.requests?.inProgress || [],
+          completed: payload.requests?.completed || []
+        };
+        if (["new", "inprogress", "completed"].includes(state.activeTab)) {
+          const list = requestsMap[state.activeTab]
+            .map(
+              (request) => `
+              <div class="item">
+                <div class="row" style="justify-content:space-between">
+                  <strong>#${request.id}</strong>
+                  <span class="badge">${request.status}</span>
+                </div>
+                <div>${request.text}</div>
+                <div class="muted">Пользователь: ${request.userTelegramId}</div>
+                <div class="row">
+                  ${
+                    request.status === "NEW"
+                      ? `<button class="success" data-take="${request.id}">Принять в работу</button>`
+                      : ""
+                  }
+                  ${
+                    request.status === "IN_PROGRESS"
+                      ? `<button class="primary" data-open-chat="${request.id}">Открыть диалог</button>
+                         <button class="danger" data-finish="${request.id}">Завершить</button>`
+                      : ""
+                  }
+                </div>
+              </div>
+            `
+            )
+            .join("");
+          contentEl.innerHTML = list || `<p class="muted">Пусто.</p>`;
+          contentEl.querySelectorAll("[data-take]").forEach((button) => {
+            button.onclick = async () => {
+              await api(`/api/requests/${button.dataset.take}/take`, { method: "POST" });
+              setStatus(`Заявка #${button.dataset.take} взята в работу.`);
+              await loadBootstrap();
+            };
+          });
+          contentEl.querySelectorAll("[data-finish]").forEach((button) => {
+            button.onclick = async () => {
+              await api(`/api/requests/${button.dataset.finish}/finish`, { method: "POST" });
+              setStatus(`Заявка #${button.dataset.finish} завершена.`);
+              await loadBootstrap();
+            };
+          });
+          contentEl.querySelectorAll("[data-open-chat]").forEach((button) => {
+            button.onclick = () => openChat(Number(button.dataset.openChat));
+          });
+          return;
+        }
+
+        if (state.activeTab === "suggestions") {
+          const rows = (payload.suggestions || [])
+            .map(
+              (item) => `
+              <div class="item">
+                <strong>#${item.id}</strong>
+                <div>${item.text}</div>
+                <div class="muted">${item.fullName || "не указано"} | ${item.organization || "не указана"}</div>
+              </div>
+            `
+            )
+            .join("");
+          contentEl.innerHTML = rows || `<p class="muted">Пока нет предложений.</p>`;
+          return;
+        }
+
+        if (state.activeTab === "instructions") {
+          const links = (payload.instructions || [])
+            .map(
+              (item) =>
+                `<button data-open-instruction="${item.url}" style="text-align:left">${item.title}</button>`
+            )
+            .join("");
+          contentEl.innerHTML = links || `<p class="muted">Инструкции недоступны.</p>`;
+          contentEl.querySelectorAll("[data-open-instruction]").forEach((button) => {
+            button.onclick = () => window.open(`${apiBase}${button.dataset.openInstruction}`, "_blank");
+          });
+        }
+      }
+
+      async function openChat(requestId) {
+        const payload = await api(`/api/requests/${requestId}/messages`);
+        state.activeChatRequestId = requestId;
+        chatCard.classList.remove("hidden");
+        chatTitle.textContent = `Диалог по заявке #${requestId}`;
+        chatMessages.innerHTML =
+          payload.messages
+            .map(
+              (message) => `
+              <div class="msg ${message.senderRole === "ADMIN" ? "admin" : ""}">
+                <strong>${message.senderRole === "ADMIN" ? "Админ" : "Пользователь"}</strong>
+                <div>${message.text}</div>
+                <div class="muted">${new Date(message.createdAt).toLocaleString()}</div>
+              </div>
+            `
+            )
+            .join("") || `<p class="muted">Сообщений пока нет.</p>`;
+      }
+
+      async function sendChatMessage() {
+        if (!state.activeChatRequestId) return;
+        const text = chatInput.value.trim();
+        if (!text) return;
+        await api(`/api/requests/${state.activeChatRequestId}/messages`, {
+          method: "POST",
+          body: { text }
+        });
+        chatInput.value = "";
+        await openChat(state.activeChatRequestId);
+      }
+
+      async function loadBootstrap() {
+        if (!telegramId) {
+          whoamiEl.textContent = "Не найден Telegram ID. Откройте Mini App внутри Telegram.";
+          setStatus("Ошибка авторизации Mini App.");
+          return;
+        }
+        const payload = await api(`/api/bootstrap?telegramId=${telegramId}`);
+        state.bootstrap = payload;
+        whoamiEl.textContent = payload.registered
+          ? `${payload.user.fullName || payload.user.username || payload.user.telegramId}`
+          : "Пользователь не зарегистрирован";
+        roleBadgeEl.textContent = payload.role || "guest";
+
+        registerCard.classList.toggle("hidden", payload.registered);
+        mainCard.classList.toggle("hidden", !payload.registered);
+        if (!payload.registered) {
+          return;
+        }
+        renderApp();
+      }
+
+      function renderApp() {
+        if (!state.bootstrap?.registered) return;
+        if (state.bootstrap.role === "ADMIN") {
+          renderAdminView();
+        } else {
+          renderUserView();
+        }
+      }
+
+      document.getElementById("register-btn").onclick = async () => {
+        const fullName = document.getElementById("reg-name").value.trim();
+        const organization = document.getElementById("reg-org").value.trim();
+        if (!fullName || !organization) {
+          setStatus("Заполните ФИО и организацию.");
+          return;
+        }
+        await api("/api/register", {
+          method: "POST",
+          body: {
+            telegramId,
+            fullName,
+            organization,
+            username: tgUser?.username || null,
+            firstName: tgUser?.first_name || null,
+            lastName: tgUser?.last_name || null
+          }
+        });
+        state.activeTab = "";
+        setStatus("Регистрация выполнена.");
+        await loadBootstrap();
+      };
+
+      document.getElementById("chat-send").onclick = () => sendChatMessage();
+      document.getElementById("chat-close").onclick = () => {
+        state.activeChatRequestId = null;
+        chatCard.classList.add("hidden");
+      };
+
+      chatInput.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          sendChatMessage();
+        }
+      });
+
+      loadBootstrap().catch((error) => {
+        whoamiEl.textContent = "Ошибка загрузки данных";
+        setStatus(error.message);
       });
     </script>
   </body>

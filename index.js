@@ -1,11 +1,16 @@
 const fs = require("fs");
 const path = require("path");
+const express = require("express");
+const cors = require("cors");
 const { Telegraf, Markup } = require("telegraf");
 require("dotenv").config();
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const WEB_APP_URL =
   process.env.WEB_APP_URL || "https://sharlayvlad.github.io/adaptlink_support/webapp/";
+const API_BASE_URL = process.env.API_BASE_URL || "";
+const API_PORT = Number(process.env.API_PORT || 3001);
+const API_CORS_ORIGINS = process.env.API_CORS_ORIGINS || "*";
 
 if (!BOT_TOKEN) {
   console.error("BOT_TOKEN not found. Create .env and set BOT_TOKEN=...");
@@ -16,6 +21,7 @@ const bot = new Telegraf(BOT_TOKEN);
 const usersDbPath = path.join(__dirname, "users.json");
 const requestsDbPath = path.join(__dirname, "requests.json");
 const suggestionsDbPath = path.join(__dirname, "suggestions.json");
+const messagesDbPath = path.join(__dirname, "messages.json");
 const instructionsDirPath = path.join(__dirname, "instructions_html");
 
 const USER_REQUEST_BUTTON = "Оставить заявку";
@@ -121,6 +127,61 @@ function readSuggestions() {
 
 function writeSuggestions(suggestions) {
   fs.writeFileSync(suggestionsDbPath, JSON.stringify(suggestions, null, 2), "utf-8");
+}
+
+function readMessages() {
+  if (!fs.existsSync(messagesDbPath)) {
+    return [];
+  }
+
+  try {
+    const content = fs.readFileSync(messagesDbPath, "utf-8");
+    return JSON.parse(content);
+  } catch (error) {
+    console.error("Cannot read messages.json:", error.message);
+    return [];
+  }
+}
+
+function writeMessages(messages) {
+  fs.writeFileSync(messagesDbPath, JSON.stringify(messages, null, 2), "utf-8");
+}
+
+function createRequestMessage(requestId, senderRole, senderTelegramId, text) {
+  const messages = readMessages();
+  const lastId = messages.length ? messages[messages.length - 1].id : 0;
+  const newMessage = {
+    id: lastId + 1,
+    requestId,
+    senderRole,
+    senderTelegramId,
+    text,
+    createdAt: new Date().toISOString()
+  };
+  messages.push(newMessage);
+  writeMessages(messages);
+  return newMessage;
+}
+
+function getRequestMessages(requestId) {
+  return readMessages()
+    .filter((message) => message.requestId === requestId)
+    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+}
+
+function resolveWebAppUrl() {
+  if (!API_BASE_URL) {
+    return WEB_APP_URL;
+  }
+
+  try {
+    const url = new URL(WEB_APP_URL);
+    url.searchParams.set("api", API_BASE_URL);
+    return url.toString();
+  } catch (error) {
+    console.error("Cannot compose WEB_APP_URL with API_BASE_URL:", error.message);
+    return WEB_APP_URL;
+  }
 }
 
 function createSuggestion(telegramUser, userProfile, text) {
@@ -245,7 +306,9 @@ function adminMenuKeyboard() {
 }
 
 function openWebAppKeyboard() {
-  return Markup.inlineKeyboard([[Markup.button.webApp("Открыть Mini App", WEB_APP_URL)]]);
+  return Markup.inlineKeyboard([
+    [Markup.button.webApp("Открыть Mini App", resolveWebAppUrl())]
+  ]);
 }
 
 function instructionsKeyboard() {
@@ -372,6 +435,58 @@ async function notifyAdminsOfSuggestion(suggestion) {
   }
 
   return deliveredCount;
+}
+
+function toTelegramFromUser(user) {
+  return {
+    id: user.telegramId,
+    username: user.username || undefined,
+    first_name: user.firstName || undefined,
+    last_name: user.lastName || undefined
+  };
+}
+
+async function notifyAdminsOfRequestFromUser(user, request) {
+  const admins = getAdmins();
+  if (!admins.length) {
+    return 0;
+  }
+
+  const senderName =
+    user.fullName ||
+    [user.firstName, user.lastName].filter(Boolean).join(" ").trim() ||
+    user.username ||
+    `ID ${user.telegramId}`;
+  const senderUsername = user.username ? `@${user.username}` : "нет";
+  const message = [
+    "Новая заявка от пользователя:",
+    `Заявка #${request.id}`,
+    `Имя: ${senderName}`,
+    `Username: ${senderUsername}`,
+    `Telegram ID: ${user.telegramId}`,
+    "",
+    "Текст заявки:",
+    request.text
+  ].join("\n");
+
+  let deliveredCount = 0;
+  for (const admin of admins) {
+    try {
+      await bot.telegram.sendMessage(admin.telegramId, message);
+      deliveredCount += 1;
+    } catch (error) {
+      console.error(`Cannot notify admin ${admin.telegramId}:`, error.message);
+    }
+  }
+  return deliveredCount;
+}
+
+function parseTelegramId(value) {
+  const id = Number(value);
+  if (!Number.isInteger(id) || id <= 0) {
+    return null;
+  }
+  return id;
 }
 
 bot.start(async (ctx) => {
@@ -868,9 +983,349 @@ bot.on("text", async (ctx) => {
   await ctx.reply("Для начала регистрации используйте команду /start.");
 });
 
+const api = express();
+const corsOptions =
+  API_CORS_ORIGINS === "*"
+    ? { origin: true, credentials: false }
+    : {
+        origin: API_CORS_ORIGINS.split(",").map((origin) => origin.trim()),
+        credentials: false
+      };
+
+api.use(cors(corsOptions));
+api.use(express.json({ limit: "1mb" }));
+
+function getUserFromRequest(req) {
+  const idFromHeader = parseTelegramId(req.headers["x-telegram-id"]);
+  const idFromQuery = parseTelegramId(req.query.telegramId);
+  const idFromBody = parseTelegramId(req.body?.telegramId);
+  const telegramId = idFromHeader || idFromQuery || idFromBody;
+  if (!telegramId) {
+    return null;
+  }
+  return findUser(telegramId) || null;
+}
+
+function mapRequestForClient(request) {
+  return {
+    ...request,
+    canOpenDialog: request.status === "IN_PROGRESS"
+  };
+}
+
+api.get("/api/health", (_req, res) => {
+  res.json({ ok: true, now: new Date().toISOString() });
+});
+
+api.get("/api/bootstrap", (req, res) => {
+  const user = getUserFromRequest(req);
+  const telegramId = parseTelegramId(req.query.telegramId);
+  if (!telegramId) {
+    return res.status(400).json({ error: "telegramId is required" });
+  }
+
+  const requests = readRequests();
+  const suggestions = readSuggestions();
+  const instructionKeys = [
+    { key: "settings", title: "Настройки" },
+    { key: "widgets", title: "Виджеты" },
+    { key: "pages", title: "Страницы" },
+    { key: "buttons", title: "Кнопки" },
+    { key: "windows11setup", title: "Установка на Windows 11" }
+  ];
+
+  const payload = {
+    registered: Boolean(user),
+    user: user || null,
+    role: user?.role || null,
+    instructions: instructionKeys
+      .filter((item) => fs.existsSync(instructionFilePath(item.key)))
+      .map((item) => ({
+        ...item,
+        url: `/api/instructions/${item.key}`
+      }))
+  };
+
+  if (!user) {
+    return res.json(payload);
+  }
+
+  if (user.role === "ADMIN") {
+    payload.requests = {
+      new: requests.filter((item) => item.status === "NEW").map(mapRequestForClient),
+      inProgress: requests
+        .filter((item) => item.status === "IN_PROGRESS")
+        .map(mapRequestForClient),
+      completed: requests
+        .filter((item) => item.status === "COMPLETED")
+        .map(mapRequestForClient)
+    };
+    payload.suggestions = suggestions.slice(-100).reverse();
+  } else {
+    payload.requests = requests
+      .filter((item) => item.userTelegramId === user.telegramId)
+      .map(mapRequestForClient)
+      .sort((a, b) => b.id - a.id);
+    payload.stats = {
+      open: payload.requests.filter((item) => item.status === "NEW").length,
+      inProgress: payload.requests.filter((item) => item.status === "IN_PROGRESS").length
+    };
+  }
+
+  return res.json(payload);
+});
+
+api.post("/api/register", (req, res) => {
+  const telegramId = parseTelegramId(req.body?.telegramId);
+  const fullName = String(req.body?.fullName || "").trim();
+  const organization = String(req.body?.organization || "").trim();
+  const username = String(req.body?.username || "").trim() || null;
+  const firstName = String(req.body?.firstName || "").trim() || null;
+  const lastName = String(req.body?.lastName || "").trim() || null;
+
+  if (!telegramId || !fullName || !organization) {
+    return res.status(400).json({ error: "telegramId, fullName and organization are required" });
+  }
+
+  const existing = findUser(telegramId);
+  if (existing) {
+    return res.json({ user: existing, alreadyExists: true });
+  }
+
+  const user = registerUser(
+    {
+      id: telegramId,
+      username: username || undefined,
+      first_name: firstName || undefined,
+      last_name: lastName || undefined
+    },
+    "USER",
+    { fullName, organization }
+  );
+
+  return res.status(201).json({ user });
+});
+
+api.post("/api/requests", async (req, res) => {
+  const user = getUserFromRequest(req);
+  const text = String(req.body?.text || "").trim();
+  if (!user) {
+    return res.status(401).json({ error: "User is not registered" });
+  }
+  if (!text) {
+    return res.status(400).json({ error: "text is required" });
+  }
+
+  const request = createRequest(toTelegramFromUser(user), text);
+  const deliveredCount = await notifyAdminsOfRequestFromUser(user, request);
+
+  return res.status(201).json({
+    request,
+    adminNotified: deliveredCount > 0
+  });
+});
+
+api.get("/api/requests/:id/messages", (req, res) => {
+  const user = getUserFromRequest(req);
+  if (!user) {
+    return res.status(401).json({ error: "User is not registered" });
+  }
+
+  const requestId = Number(req.params.id);
+  if (!Number.isInteger(requestId) || requestId <= 0) {
+    return res.status(400).json({ error: "Invalid request id" });
+  }
+
+  const request = findRequestById(requestId);
+  if (!request) {
+    return res.status(404).json({ error: "Request not found" });
+  }
+
+  if (user.role === "USER" && request.userTelegramId !== user.telegramId) {
+    return res.status(403).json({ error: "Access denied" });
+  }
+
+  if (user.role === "ADMIN") {
+    const isAssignee = request.assignedAdminTelegramId === user.telegramId;
+    const canReadShared = request.status === "NEW";
+    if (!isAssignee && !canReadShared) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+  }
+
+  return res.json({ request, messages: getRequestMessages(requestId) });
+});
+
+api.post("/api/requests/:id/messages", async (req, res) => {
+  const user = getUserFromRequest(req);
+  const text = String(req.body?.text || "").trim();
+  if (!user) {
+    return res.status(401).json({ error: "User is not registered" });
+  }
+  if (!text) {
+    return res.status(400).json({ error: "text is required" });
+  }
+
+  const requestId = Number(req.params.id);
+  if (!Number.isInteger(requestId) || requestId <= 0) {
+    return res.status(400).json({ error: "Invalid request id" });
+  }
+
+  const request = findRequestById(requestId);
+  if (!request) {
+    return res.status(404).json({ error: "Request not found" });
+  }
+  if (request.status !== "IN_PROGRESS") {
+    return res.status(409).json({ error: "Dialog is available only for IN_PROGRESS requests" });
+  }
+
+  if (user.role === "USER") {
+    if (request.userTelegramId !== user.telegramId || !request.assignedAdminTelegramId) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+    try {
+      await bot.telegram.sendMessage(
+        request.assignedAdminTelegramId,
+        [`Сообщение от пользователя по заявке #${request.id}:`, "", text].join("\n")
+      );
+    } catch (error) {
+      return res.status(502).json({ error: "Cannot deliver message to admin now" });
+    }
+  } else if (user.role === "ADMIN") {
+    if (request.assignedAdminTelegramId !== user.telegramId) {
+      return res.status(403).json({ error: "Request is assigned to another admin" });
+    }
+    try {
+      await bot.telegram.sendMessage(
+        request.userTelegramId,
+        [`Сообщение администратора по заявке #${request.id}:`, "", text].join("\n")
+      );
+    } catch (error) {
+      return res.status(502).json({ error: "Cannot deliver message to user now" });
+    }
+  } else {
+    return res.status(403).json({ error: "Unsupported role" });
+  }
+
+  const message = createRequestMessage(request.id, user.role, user.telegramId, text);
+  return res.status(201).json({ message });
+});
+
+api.post("/api/requests/:id/take", async (req, res) => {
+  const user = getUserFromRequest(req);
+  if (!user || user.role !== "ADMIN") {
+    return res.status(403).json({ error: "Only admin can take request" });
+  }
+  const requestId = Number(req.params.id);
+  if (!Number.isInteger(requestId) || requestId <= 0) {
+    return res.status(400).json({ error: "Invalid request id" });
+  }
+
+  const request = findRequestById(requestId);
+  if (!request) {
+    return res.status(404).json({ error: "Request not found" });
+  }
+  if (request.status !== "NEW") {
+    return res.status(409).json({ error: "Only NEW request can be taken" });
+  }
+
+  const updatedRequest = takeRequestInWork(requestId, user.telegramId);
+  try {
+    await bot.telegram.sendMessage(
+      updatedRequest.userTelegramId,
+      `Ваша заявка #${updatedRequest.id} принята в работу администратором.`
+    );
+  } catch (error) {
+    console.error(
+      `Cannot notify user ${updatedRequest.userTelegramId} about IN_PROGRESS:`,
+      error.message
+    );
+  }
+
+  return res.json({ request: updatedRequest });
+});
+
+api.post("/api/requests/:id/finish", async (req, res) => {
+  const user = getUserFromRequest(req);
+  if (!user || user.role !== "ADMIN") {
+    return res.status(403).json({ error: "Only admin can finish request" });
+  }
+  const requestId = Number(req.params.id);
+  if (!Number.isInteger(requestId) || requestId <= 0) {
+    return res.status(400).json({ error: "Invalid request id" });
+  }
+
+  const request = findRequestById(requestId);
+  if (!request) {
+    return res.status(404).json({ error: "Request not found" });
+  }
+  if (request.status !== "IN_PROGRESS") {
+    return res.status(409).json({ error: "Only IN_PROGRESS request can be completed" });
+  }
+  if (request.assignedAdminTelegramId !== user.telegramId) {
+    return res.status(403).json({ error: "Request is assigned to another admin" });
+  }
+
+  const updatedRequest = completeRequest(requestId);
+  try {
+    await bot.telegram.sendMessage(
+      updatedRequest.userTelegramId,
+      "Администратор завершил работу. Спасибо за обращение!"
+    );
+  } catch (error) {
+    console.error(
+      `Cannot notify user ${updatedRequest.userTelegramId} about COMPLETED:`,
+      error.message
+    );
+  }
+
+  return res.json({ request: updatedRequest });
+});
+
+api.post("/api/suggestions", async (req, res) => {
+  const user = getUserFromRequest(req);
+  if (!user) {
+    return res.status(401).json({ error: "User is not registered" });
+  }
+
+  const text = String(req.body?.text || "").trim();
+  if (!text) {
+    return res.status(400).json({ error: "text is required" });
+  }
+
+  const suggestion = createSuggestion(toTelegramFromUser(user), user, text);
+  const deliveredCount = await notifyAdminsOfSuggestion(suggestion);
+  return res.status(201).json({ suggestion, adminNotified: deliveredCount > 0 });
+});
+
+api.get("/api/suggestions", (req, res) => {
+  const user = getUserFromRequest(req);
+  if (!user || user.role !== "ADMIN") {
+    return res.status(403).json({ error: "Only admin can read suggestions" });
+  }
+  return res.json({ suggestions: readSuggestions().slice(-200).reverse() });
+});
+
+api.get("/api/instructions/:key", (req, res) => {
+  const filePath = instructionFilePath(req.params.key);
+  if (!filePath || !fs.existsSync(filePath)) {
+    return res.status(404).send("Instruction not found");
+  }
+  return res.sendFile(filePath);
+});
+
+const apiServer = api.listen(API_PORT, () => {
+  console.log(`Mini App API started on port ${API_PORT}`);
+});
+
 bot.launch().then(() => {
   console.log("Bot started");
 });
 
-process.once("SIGINT", () => bot.stop("SIGINT"));
-process.once("SIGTERM", () => bot.stop("SIGTERM"));
+function shutdown(signal) {
+  bot.stop(signal);
+  apiServer.close(() => process.exit(0));
+}
+
+process.once("SIGINT", () => shutdown("SIGINT"));
+process.once("SIGTERM", () => shutdown("SIGTERM"));

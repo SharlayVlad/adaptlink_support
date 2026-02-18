@@ -21,6 +21,7 @@
 - По каждому подпункту бот отправляет HTML-файл инструкции.
 - Для ролей `Пользователь` и `Админ` доступна кнопка `Открыть приложение`,
   которая открывает Telegram Mini App по URL из `WEB_APP_URL`.
+- Добавлен API для Mini App: регистрация, заявки, предложения, статусы, диалоги, инструкции.
 - После отправки текста заявки бот уведомляет всех зарегистрированных админов.
 - Для роли `Админ` добавлено меню:
   - `Список заявок` (показывает `NEW` и `IN_PROGRESS`),
@@ -44,7 +45,10 @@ npm install
 
 ```env
 BOT_TOKEN=ваш_токен_бота
-WEB_APP_URL=https://sharlayvlad.github.io/adaptlink_support/webapp/
+WEB_APP_URL=https://ваш-miniapp-url.vercel.app
+API_BASE_URL=https://ваш-api-url.example.com
+API_PORT=3001
+API_CORS_ORIGINS=*
 ```
 
 3. Запустить (с автоперезапуском при изменениях кода):
@@ -56,8 +60,53 @@ npm start
 ## Структура
 
 - `index.js` - логика бота
-- `webapp/index.html` - минимальный фронтенд Telegram Mini App
+- `webapp/index.html` - полноценный фронтенд Telegram Mini App
+- `deploy/nginx/adaptlink-api.conf.example` - шаблон nginx-конфига для API
 - `users.json` - база зарегистрированных пользователей (создается автоматически)
 - `requests.json` - список заявок пользователей (создается автоматически)
 - `suggestions.json` - список предложений по доработке (создается автоматически)
+- `messages.json` - история сообщений в диалогах заявок (создается автоматически)
 - `instructions_html/` - тестовые HTML-инструкции для разделов
+
+## Nginx + HTTPS для API (Ubuntu)
+
+Пример для домена `api.example.com` и локального API на порту `3001`.
+
+1. Установить nginx и certbot:
+
+```bash
+sudo apt update
+sudo apt install -y nginx certbot python3-certbot-nginx
+```
+
+2. Скопировать конфиг и включить сайт:
+
+```bash
+sudo cp deploy/nginx/adaptlink-api.conf.example /etc/nginx/sites-available/adaptlink-api.conf
+sudo nano /etc/nginx/sites-available/adaptlink-api.conf
+sudo ln -s /etc/nginx/sites-available/adaptlink-api.conf /etc/nginx/sites-enabled/adaptlink-api.conf
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+3. Выпустить TLS-сертификат:
+
+```bash
+sudo certbot --nginx -d api.example.com
+```
+
+4. Проверить `.env` на сервере:
+
+```env
+WEB_APP_URL=https://your-miniapp.vercel.app
+API_BASE_URL=https://api.example.com
+API_PORT=3001
+API_CORS_ORIGINS=https://your-miniapp.vercel.app
+```
+
+5. Перезапустить бота:
+
+```bash
+pm2 restart adaptlink-bot
+pm2 logs adaptlink-bot --lines 100
+```
