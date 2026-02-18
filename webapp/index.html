@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AdaptLink Support Mini App</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #f4f6fb;
+        --card: #ffffff;
+        --text: #1f2937;
+        --muted: #6b7280;
+        --accent: #2aabee;
+        --accent-text: #ffffff;
+        --border: #e5e7eb;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #111827;
+          --card: #1f2937;
+          --text: #f3f4f6;
+          --muted: #9ca3af;
+          --border: #374151;
+        }
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+
+      .app {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 16px;
+        display: grid;
+        gap: 12px;
+      }
+
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 14px;
+      }
+
+      h1 {
+        margin: 0 0 6px;
+        font-size: 22px;
+      }
+
+      p {
+        margin: 0;
+      }
+
+      .muted {
+        color: var(--muted);
+      }
+
+      .grid {
+        display: grid;
+        gap: 10px;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .kpi {
+        font-size: 14px;
+      }
+
+      .kpi strong {
+        display: block;
+        margin-top: 4px;
+        font-size: 22px;
+      }
+
+      input,
+      textarea,
+      select,
+      button {
+        width: 100%;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        background: var(--card);
+        color: var(--text);
+        font: inherit;
+      }
+
+      input,
+      textarea,
+      select {
+        padding: 10px 12px;
+      }
+
+      textarea {
+        min-height: 100px;
+        resize: vertical;
+      }
+
+      button {
+        padding: 11px 14px;
+        background: var(--accent);
+        color: var(--accent-text);
+        border: none;
+        cursor: pointer;
+      }
+
+      .stack {
+        display: grid;
+        gap: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="app">
+      <section class="card">
+        <h1>AdaptLink Support</h1>
+        <p class="muted">Mini App для пользователей Telegram-бота.</p>
+      </section>
+
+      <section class="card grid">
+        <div class="kpi">
+          Открытые заявки
+          <strong id="open-count">0</strong>
+        </div>
+        <div class="kpi">
+          В работе
+          <strong id="work-count">0</strong>
+        </div>
+      </section>
+
+      <section class="card stack">
+        <h2 style="margin: 0; font-size: 18px">Новая заявка</h2>
+        <label>
+          Тема
+          <input id="topic" placeholder="Кратко опишите проблему" />
+        </label>
+        <label>
+          Описание
+          <textarea id="details" placeholder="Детально опишите проблему"></textarea>
+        </label>
+        <label>
+          Приоритет
+          <select id="priority">
+            <option>Низкий</option>
+            <option selected>Средний</option>
+            <option>Высокий</option>
+          </select>
+        </label>
+        <button id="send-btn" type="button">Отправить заявку</button>
+        <p id="status" class="muted">Статус: готово к подключению API.</p>
+      </section>
+    </main>
+
+    <script>
+      const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+      if (tg) {
+        tg.ready();
+        tg.expand();
+      }
+
+      const openCountEl = document.getElementById("open-count");
+      const workCountEl = document.getElementById("work-count");
+      const statusEl = document.getElementById("status");
+      const sendBtn = document.getElementById("send-btn");
+
+      // Demo data until backend API is connected.
+      openCountEl.textContent = "2";
+      workCountEl.textContent = "1";
+
+      sendBtn.addEventListener("click", () => {
+        const topic = document.getElementById("topic").value.trim();
+        const details = document.getElementById("details").value.trim();
+        const priority = document.getElementById("priority").value;
+
+        if (!topic || !details) {
+          statusEl.textContent = "Заполните тему и описание.";
+          return;
+        }
+
+        statusEl.textContent = `Черновик: ${topic} (${priority}). Подключим отправку на API на следующем шаге.`;
+
+        if (tg && typeof tg.showAlert === "function") {
+          tg.showAlert("Заявка сохранена как черновик в Mini App.");
+        }
+      });
+    </script>
+  </body>
+</html>

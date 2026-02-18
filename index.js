@@ -4,6 +4,8 @@ const { Telegraf, Markup } = require("telegraf");
 require("dotenv").config();
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
+const WEB_APP_URL =
+  process.env.WEB_APP_URL || "https://sharlayvlad.github.io/adaptlink_support/webapp/";
 
 if (!BOT_TOKEN) {
   console.error("BOT_TOKEN not found. Create .env and set BOT_TOKEN=...");
@@ -19,6 +21,7 @@ const instructionsDirPath = path.join(__dirname, "instructions_html");
 const USER_REQUEST_BUTTON = "Оставить заявку";
 const SUGGESTIONS_BUTTON = "Предложения по доработке!";
 const INSTRUCTIONS_BUTTON = "Инструкции";
+const OPEN_WEB_APP_BUTTON = "Открыть приложение";
 const START_REGISTRATION_BUTTON = "Регистрация";
 const ADMIN_LIST_REQUESTS_BUTTON = "Список заявок";
 const ADMIN_TAKE_REQUEST_BUTTON = "Принять в работу";
@@ -225,6 +228,7 @@ function userMenuKeyboard() {
   return Markup.keyboard([
     [USER_REQUEST_BUTTON],
     [SUGGESTIONS_BUTTON],
+    [OPEN_WEB_APP_BUTTON],
     [INSTRUCTIONS_BUTTON]
   ]).resize();
 }
@@ -235,8 +239,13 @@ function adminMenuKeyboard() {
     [ADMIN_TAKE_REQUEST_BUTTON, ADMIN_OPEN_DIALOG_BUTTON],
     [ADMIN_FINISH_REQUEST_BUTTON],
     [SUGGESTIONS_BUTTON],
+    [OPEN_WEB_APP_BUTTON],
     [INSTRUCTIONS_BUTTON]
   ]).resize();
+}
+
+function openWebAppKeyboard() {
+  return Markup.inlineKeyboard([[Markup.button.webApp("Открыть Mini App", WEB_APP_URL)]]);
 }
 
 function instructionsKeyboard() {
@@ -432,6 +441,11 @@ bot.on("text", async (ctx) => {
         return;
       }
 
+      if (text === OPEN_WEB_APP_BUTTON) {
+        await ctx.reply("Откройте Mini App:", openWebAppKeyboard());
+        return;
+      }
+
       if (text === USER_REQUEST_BUTTON) {
         session.step = "WAITING_REQUEST_TEXT";
         registrationSessions.set(ctx.from.id, session);
@@ -543,6 +557,11 @@ bot.on("text", async (ctx) => {
 
       if (text === INSTRUCTIONS_BUTTON) {
         await ctx.reply("Выберите раздел инструкций:", instructionsKeyboard());
+        return;
+      }
+
+      if (text === OPEN_WEB_APP_BUTTON) {
+        await ctx.reply("Откройте Mini App:", openWebAppKeyboard());
         return;
       }
 
