@@ -49,6 +49,7 @@ WEB_APP_URL=https://ваш-miniapp-url.vercel.app
 API_BASE_URL=https://ваш-api-url.example.com
 API_PORT=3001
 API_CORS_ORIGINS=*
+MINIAPP_FORWARD_TO_TELEGRAM=false
 ```
 
 3. Запустить (с автоперезапуском при изменениях кода):
@@ -102,6 +103,7 @@ WEB_APP_URL=https://your-miniapp.vercel.app
 API_BASE_URL=https://api.example.com
 API_PORT=3001
 API_CORS_ORIGINS=https://your-miniapp.vercel.app
+MINIAPP_FORWARD_TO_TELEGRAM=false
 ```
 
 5. Перезапустить бота:

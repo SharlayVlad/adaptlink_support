@@ -11,6 +11,7 @@ const WEB_APP_URL =
 const API_BASE_URL = process.env.API_BASE_URL || "";
 const API_PORT = Number(process.env.API_PORT || 3001);
 const API_CORS_ORIGINS = process.env.API_CORS_ORIGINS || "*";
+const MINIAPP_FORWARD_TO_TELEGRAM = process.env.MINIAPP_FORWARD_TO_TELEGRAM === "true";
 
 if (!BOT_TOKEN) {
   console.error("BOT_TOKEN not found. Create .env and set BOT_TOKEN=...");
@@ -1061,6 +1062,19 @@ api.get("/api/bootstrap", (req, res) => {
         .map(mapRequestForClient)
     };
     payload.suggestions = suggestions.slice(-100).reverse();
+    payload.users = readUsers()
+      .slice()
+      .sort((a, b) => new Date(b.registeredAt).getTime() - new Date(a.registeredAt).getTime())
+      .map((item) => ({
+        telegramId: item.telegramId,
+        username: item.username || null,
+        firstName: item.firstName || null,
+        lastName: item.lastName || null,
+        fullName: item.fullName || null,
+        organization: item.organization || null,
+        role: item.role,
+        registeredAt: item.registeredAt
+      }));
   } else {
     payload.requests = requests
       .filter((item) => item.userTelegramId === user.telegramId)
@@ -1183,25 +1197,29 @@ api.post("/api/requests/:id/messages", async (req, res) => {
     if (request.userTelegramId !== user.telegramId || !request.assignedAdminTelegramId) {
       return res.status(403).json({ error: "Access denied" });
     }
-    try {
-      await bot.telegram.sendMessage(
-        request.assignedAdminTelegramId,
-        [`Сообщение от пользователя по заявке #${request.id}:`, "", text].join("\n")
-      );
-    } catch (error) {
-      return res.status(502).json({ error: "Cannot deliver message to admin now" });
+    if (MINIAPP_FORWARD_TO_TELEGRAM) {
+      try {
+        await bot.telegram.sendMessage(
+          request.assignedAdminTelegramId,
+          [`Сообщение от пользователя по заявке #${request.id}:`, "", text].join("\n")
+        );
+      } catch (error) {
+        return res.status(502).json({ error: "Cannot deliver message to admin now" });
+      }
     }
   } else if (user.role === "ADMIN") {
     if (request.assignedAdminTelegramId !== user.telegramId) {
       return res.status(403).json({ error: "Request is assigned to another admin" });
     }
-    try {
-      await bot.telegram.sendMessage(
-        request.userTelegramId,
-        [`Сообщение администратора по заявке #${request.id}:`, "", text].join("\n")
-      );
-    } catch (error) {
-      return res.status(502).json({ error: "Cannot deliver message to user now" });
+    if (MINIAPP_FORWARD_TO_TELEGRAM) {
+      try {
+        await bot.telegram.sendMessage(
+          request.userTelegramId,
+          [`Сообщение администратора по заявке #${request.id}:`, "", text].join("\n")
+        );
+      } catch (error) {
+        return res.status(502).json({ error: "Cannot deliver message to user now" });
+      }
     }
   } else {
     return res.status(403).json({ error: "Unsupported role" });
