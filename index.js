@@ -40,6 +40,8 @@ const USER_WELCOME_MESSAGE = [
 ].join("\n");
 
 const registrationSessions = new Map();
+const typingSessions = new Map();
+const TYPING_TTL_MS = 4500;
 
 function readUsers() {
   if (!fs.existsSync(usersDbPath)) {
@@ -216,6 +218,37 @@ function getRequestMessages(requestId) {
   return readMessages()
     .filter((message) => message.requestId === requestId)
     .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+}
+
+function setTypingSignal(requestId, role, telegramId) {
+  typingSessions.set(requestId, {
+    role,
+    telegramId,
+    updatedAt: Date.now()
+  });
+}
+
+function clearTypingSignal(requestId, telegramId) {
+  const signal = typingSessions.get(requestId);
+  if (!signal) return;
+  if (!telegramId || signal.telegramId === telegramId) {
+    typingSessions.delete(requestId);
+  }
+}
+
+function getTypingSignalForViewer(requestId, viewerRole) {
+  const signal = typingSessions.get(requestId);
+  if (!signal) {
+    return { isTyping: false, role: null };
+  }
+  if (Date.now() - signal.updatedAt > TYPING_TTL_MS) {
+    typingSessions.delete(requestId);
+    return { isTyping: false, role: null };
+  }
+  if (signal.role === viewerRole) {
+    return { isTyping: false, role: null };
+  }
+  return { isTyping: true, role: signal.role };
 }
 
 function resolveWebAppUrl(telegramId) {
@@ -1251,7 +1284,11 @@ api.get("/api/requests/:id/messages", (req, res) => {
     }
   }
 
-  return res.json({ request, messages: getRequestMessages(requestId) });
+  return res.json({
+    request,
+    messages: getRequestMessages(requestId),
+    typing: getTypingSignalForViewer(requestId, user.role)
+  });
 });
 
 api.post("/api/requests/:id/messages", async (req, res) => {
@@ -1309,8 +1346,44 @@ api.post("/api/requests/:id/messages", async (req, res) => {
     return res.status(403).json({ error: "Unsupported role" });
   }
 
+  clearTypingSignal(request.id, user.telegramId);
   const message = createRequestMessage(request.id, user.role, user.telegramId, text);
   return res.status(201).json({ message });
+});
+
+api.post("/api/requests/:id/typing", (req, res) => {
+  const user = getUserFromRequest(req);
+  if (!user) {
+    return res.status(401).json({ error: "User is not registered" });
+  }
+
+  const requestId = Number(req.params.id);
+  if (!Number.isInteger(requestId) || requestId <= 0) {
+    return res.status(400).json({ error: "Invalid request id" });
+  }
+
+  const request = findRequestById(requestId);
+  if (!request) {
+    return res.status(404).json({ error: "Request not found" });
+  }
+  if (request.status !== "IN_PROGRESS") {
+    return res.status(409).json({ error: "Typing is available only for IN_PROGRESS requests" });
+  }
+
+  if (user.role === "USER") {
+    if (request.userTelegramId !== user.telegramId) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+  } else if (user.role === "ADMIN") {
+    if (request.assignedAdminTelegramId !== user.telegramId) {
+      return res.status(403).json({ error: "Request is assigned to another admin" });
+    }
+  } else {
+    return res.status(403).json({ error: "Unsupported role" });
+  }
+
+  setTypingSignal(request.id, user.role, user.telegramId);
+  return res.json({ ok: true });
 });
 
 api.post("/api/requests/:id/take", async (req, res) => {

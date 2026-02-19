@@ -1,5 +1,5 @@
 import './App.css'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 type Role = 'USER' | 'ADMIN'
 type RequestStatus = 'NEW' | 'IN_PROGRESS' | 'COMPLETED'
@@ -59,6 +59,17 @@ type RequestMessage = {
   createdAt: string
 }
 
+type TypingState = {
+  isTyping: boolean
+  role: Role | null
+}
+
+type ChatPayload = {
+  request: SupportRequest
+  messages: RequestMessage[]
+  typing?: TypingState
+}
+
 type BootstrapPayload = {
   registered: boolean
   user: UserProfile | null
@@ -114,6 +125,14 @@ function icon(id: string): string {
     info: '<svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 10v6"/><circle cx="12" cy="7" r="1"/></svg>',
     trash:
       '<svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M4 7h16"/><path d="M9 7V5h6v2"/><path d="M7 7l1 12h8l1-12"/><path d="M10 11v5M14 11v5"/></svg>',
+    inbox:
+      '<svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M3 13.5V6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v7.5"/><path d="M3 13.5h5l2 3h4l2-3h5"/><path d="M3 13.5V18a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-4.5"/></svg>',
+    users:
+      '<svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M16 19a4 4 0 0 0-8 0"/><circle cx="12" cy="9" r="3"/><path d="M20 18a3.5 3.5 0 0 0-2.8-3.4"/><path d="M4 18a3.5 3.5 0 0 1 2.8-3.4"/></svg>',
+    spark:
+      '<svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M12 3l1.8 4.7L18.5 9l-4.7 1.8L12 15.5l-1.8-4.7L5.5 9l4.7-1.3z"/><path d="M19 2v3M20.5 3.5h-3"/><path d="M4 17v2.5M5.2 18.2H2.8"/></svg>',
+    pencil:
+      '<svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4z"/></svg>',
   }
   return map[id] || ''
 }
@@ -136,6 +155,16 @@ function statusClass(status: RequestStatus): string {
   if (status === 'IN_PROGRESS') return 'in-progress'
   if (status === 'COMPLETED') return 'completed'
   return 'new'
+}
+
+function EmptyState(props: { iconSvg: string; title: string; description: string }) {
+  return (
+    <div className="empty-state">
+      <span className="empty-state-icon" dangerouslySetInnerHTML={{ __html: props.iconSvg }} />
+      <strong>{props.title}</strong>
+      <p className="muted">{props.description}</p>
+    </div>
+  )
 }
 
 async function api<T>(
@@ -171,6 +200,8 @@ function App() {
   const [activeTab, setActiveTab] = useState<'home' | 'requests' | 'profile'>('home')
   const [adminFilter, setAdminFilter] = useState<'new' | 'inprogress' | 'completed'>('new')
   const [chatRequestId, setChatRequestId] = useState<number | null>(null)
+  const [chatLoading, setChatLoading] = useState(false)
+  const [chatTypingRole, setChatTypingRole] = useState<Role | null>(null)
   const [chatStatus, setChatStatus] = useState<RequestStatus>('IN_PROGRESS')
   const [chatMessages, setChatMessages] = useState<RequestMessage[]>([])
   const [chatText, setChatText] = useState('')
@@ -183,6 +214,7 @@ function App() {
   const [expandedUserId, setExpandedUserId] = useState<number | null>(null)
   const [deletingUserId, setDeletingUserId] = useState<number | null>(null)
   const [bootstrapLoaded, setBootstrapLoaded] = useState(false)
+  const typingPingAtRef = useRef(0)
   const tgUser = tg?.initDataUnsafe?.user || null
   const telegramId = tgUser?.id || Number(params.get('telegramId')) || null
 
@@ -225,19 +257,26 @@ function App() {
     return () => window.clearTimeout(timer)
   }, [loadBootstrap])
 
-  const refreshChat = useCallback(async (scroll = false) => {
-    if (!chatRequestId) return
-    const data = await api<{ request: SupportRequest; messages: RequestMessage[] }>(
-      `/api/requests/${chatRequestId}/messages`,
-      telegramId
-    )
-    setChatStatus(data.request.status)
-    setChatMessages(data.messages)
-    if (scroll) {
-      requestAnimationFrame(() => {
-        const el = document.getElementById('chat-messages')
-        if (el) el.scrollTop = el.scrollHeight
-      })
+  const refreshChat = useCallback(async (scroll = false, showLoader = false, forcedRequestId?: number) => {
+    const requestId = forcedRequestId || chatRequestId
+    if (!requestId) return
+    if (showLoader) setChatLoading(true)
+    try {
+      const data = await api<ChatPayload>(
+        `/api/requests/${requestId}/messages`,
+        telegramId
+      )
+      setChatStatus(data.request.status)
+      setChatMessages(data.messages)
+      setChatTypingRole(data.typing?.isTyping ? data.typing.role || null : null)
+      if (scroll) {
+        requestAnimationFrame(() => {
+          const el = document.getElementById('chat-messages')
+          if (el) el.scrollTop = el.scrollHeight
+        })
+      }
+    } finally {
+      if (showLoader) setChatLoading(false)
     }
   }, [chatRequestId, telegramId])
 
@@ -314,6 +353,23 @@ function App() {
     await refreshChat(true)
   }
 
+  async function notifyTyping() {
+    if (!chatRequestId || !telegramId) return
+    const now = Date.now()
+    if (now - typingPingAtRef.current < 1200) return
+    typingPingAtRef.current = now
+    await api(`/api/requests/${chatRequestId}/typing`, telegramId, { method: 'POST' })
+  }
+
+  function openChat(requestId: number) {
+    setChatRequestId(requestId)
+    setChatMessages([])
+    setChatTypingRole(null)
+    void refreshChat(true, true, requestId).catch((error: Error) => {
+      setStatus(error.message)
+    })
+  }
+
   async function deleteRegisteredUser(targetUserId: number, displayName: string) {
     if (!window.confirm(`Удалить пользователя "${displayName}"?`)) return
     setDeletingUserId(targetUserId)
@@ -382,9 +438,13 @@ function App() {
 
         {!bootstrapLoaded && (
           <section className="card">
-            <div className="hint-card">
-              <strong>Проверяю авторизацию...</strong>
-              <p className="muted">Подождите пару секунд, загружаю данные профиля.</p>
+            <div className="stack">
+              <div className="skeleton-line skeleton-lg" />
+              <div className="skeleton-line skeleton-md" />
+              <div className="skeleton-grid">
+                <div className="skeleton-tile" />
+                <div className="skeleton-tile" />
+              </div>
             </div>
           </section>
         )}
@@ -498,14 +558,13 @@ function App() {
                       <strong>#{request.id}</strong>
                       <span className={`status-chip ${statusClass(request.status)}`}>{statusLabel(request.status)}</span>
                     </div>
-                    <div>{request.text}</div>
+                    <div className="content-text">{request.text}</div>
                     <div className="muted">{formatDate(request.createdAt)}</div>
                     {request.status === 'IN_PROGRESS' && (
                       <button
                         className="btn btn-primary"
                         onClick={() => {
-                          setChatRequestId(request.id)
-                          void refreshChat(true)
+                          openChat(request.id)
                         }}
                       >
                         Открыть диалог
@@ -513,7 +572,13 @@ function App() {
                     )}
                   </div>
                 ))}
-                {!userRequests.length && <p className="muted">Пока нет заявок.</p>}
+                {!userRequests.length && (
+                  <EmptyState
+                    iconSvg={icon('inbox')}
+                    title="Заявок пока нет"
+                    description="Создайте первую заявку через кнопку «Новая заявка»."
+                  />
+                )}
               </div>
             )}
 
@@ -542,7 +607,7 @@ function App() {
                       <strong>#{request.id}</strong>
                       <span className={`status-chip ${statusClass(request.status)}`}>{statusLabel(request.status)}</span>
                     </div>
-                    <div>{request.text}</div>
+                    <div className="content-text">{request.text}</div>
                     <div className="muted">Пользователь: {request.userTelegramId}</div>
                     <div className="row">
                       {request.status === 'NEW' && (
@@ -555,8 +620,7 @@ function App() {
                           <button
                             className="btn btn-primary"
                             onClick={() => {
-                              setChatRequestId(request.id)
-                              void refreshChat(true)
+                              openChat(request.id)
                             }}
                           >
                             Диалог
@@ -572,7 +636,13 @@ function App() {
                     </div>
                   </div>
                 ))}
-                {!activeAdminList.length && <p className="muted">Пусто.</p>}
+                {!activeAdminList.length && (
+                  <EmptyState
+                    iconSvg={icon('inbox')}
+                    title="Список пуст"
+                    description="В этом разделе пока нет заявок."
+                  />
+                )}
               </div>
             )}
 
@@ -638,7 +708,13 @@ function App() {
                           </div>
                         )
                       })}
-                      {!bootstrap?.users?.length && <p className="muted">Пользователи пока не зарегистрированы.</p>}
+                      {!bootstrap?.users?.length && (
+                        <EmptyState
+                          iconSvg={icon('users')}
+                          title="Нет зарегистрированных пользователей"
+                          description="Пользователи появятся здесь после регистрации в Mini App."
+                        />
+                      )}
                     </div>
                   </div>
                 )}
@@ -662,13 +738,19 @@ function App() {
                     (bootstrap?.suggestions || []).map((item) => (
                       <div key={item.id} className="item">
                         <strong>#{item.id}</strong>
-                        <div>{item.text}</div>
+                        <div className="content-text">{item.text}</div>
                         <div className="muted">
                           {(item.fullName || 'не указано') + ' | ' + (item.organization || 'не указана')}
                         </div>
                       </div>
                     ))}
-                  {isAdmin && !bootstrap?.suggestions?.length && <p className="muted">Пока нет предложений.</p>}
+                  {isAdmin && !bootstrap?.suggestions?.length && (
+                    <EmptyState
+                      iconSvg={icon('spark')}
+                      title="Предложений пока нет"
+                      description="Новые предложения пользователей будут показаны здесь."
+                    />
+                  )}
                 </div>
 
                 <div className="item">
@@ -720,7 +802,15 @@ function App() {
         <section className="chat-overlay">
           <div className="chat-header">
             <div className="chat-head-left">
-              <button className="icon-btn" onClick={() => setChatRequestId(null)} dangerouslySetInnerHTML={{ __html: icon('back') }} />
+              <button
+                className="icon-btn"
+                onClick={() => {
+                  setChatRequestId(null)
+                  setChatLoading(false)
+                  setChatTypingRole(null)
+                }}
+                dangerouslySetInnerHTML={{ __html: icon('back') }}
+              />
               <strong>Заявка #{chatRequestId}</strong>
             </div>
             <span className={`status-chip ${statusClass(chatStatus)}`}>{statusLabel(chatStatus)}</span>
@@ -740,7 +830,27 @@ function App() {
                 </div>
               )
             })}
-            {!chatMessages.length && <p className="muted">Сообщений пока нет.</p>}
+            {chatLoading && (
+              <div className="chat-loading">
+                <div className="skeleton-line skeleton-lg" />
+                <div className="skeleton-line skeleton-md" />
+                <div className="skeleton-line" />
+                <div className="skeleton-line skeleton-md" />
+              </div>
+            )}
+            {!chatLoading && chatTypingRole && (
+              <div className="typing-indicator">
+                <span className="typing-pencil" dangerouslySetInnerHTML={{ __html: icon('pencil') }} />
+                <span className="typing-text">Собеседник пишет...</span>
+              </div>
+            )}
+            {!chatLoading && !chatMessages.length && (
+              <EmptyState
+                iconSvg={icon('inbox')}
+                title="Сообщений пока нет"
+                description="Напишите первое сообщение, чтобы начать диалог."
+              />
+            )}
           </div>
           <div className="chat-footer">
             <div className="chat-input-row">
@@ -749,7 +859,13 @@ function App() {
                 className="field"
                 placeholder="Введите сообщение..."
                 value={chatText}
-                onChange={(e) => setChatText(e.target.value)}
+                onChange={(e) => {
+                  const value = e.target.value
+                  setChatText(value)
+                  if (value.trim()) {
+                    void notifyTyping().catch(() => undefined)
+                  }
+                }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     e.preventDefault()
