@@ -2,7 +2,9 @@ const fs = require("fs");
 const path = require("path");
 const express = require("express");
 const cors = require("cors");
+const multer = require("multer");
 const { Telegraf, Markup } = require("telegraf");
+const dataStore = require("./db");
 require("dotenv").config();
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
@@ -12,18 +14,21 @@ const API_BASE_URL = process.env.API_BASE_URL || "";
 const API_PORT = Number(process.env.API_PORT || 3001);
 const API_CORS_ORIGINS = process.env.API_CORS_ORIGINS || "*";
 const MINIAPP_FORWARD_TO_TELEGRAM = process.env.MINIAPP_FORWARD_TO_TELEGRAM === "true";
+const UPLOADS_DIR = path.join(__dirname, "uploads");
 
 if (!BOT_TOKEN) {
   console.error("BOT_TOKEN not found. Create .env and set BOT_TOKEN=...");
   process.exit(1);
 }
 
+if (!fs.existsSync(UPLOADS_DIR)) {
+  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+}
+dataStore.initDatabase(__dirname);
+
 const bot = new Telegraf(BOT_TOKEN);
-const usersDbPath = path.join(__dirname, "users.json");
-const requestsDbPath = path.join(__dirname, "requests.json");
-const suggestionsDbPath = path.join(__dirname, "suggestions.json");
-const messagesDbPath = path.join(__dirname, "messages.json");
 const instructionsDirPath = path.join(__dirname, "instructions_html");
+const upload = multer({ dest: UPLOADS_DIR, limits: { fileSize: 10 * 1024 * 1024 } });
 
 const USER_REQUEST_BUTTON = "Оставить заявку";
 const SUGGESTIONS_BUTTON = "Предложения по доработке!";
@@ -44,21 +49,11 @@ const typingSessions = new Map();
 const TYPING_TTL_MS = 4500;
 
 function readUsers() {
-  if (!fs.existsSync(usersDbPath)) {
-    return [];
-  }
-
-  try {
-    const content = fs.readFileSync(usersDbPath, "utf-8");
-    return JSON.parse(content);
-  } catch (error) {
-    console.error("Cannot read users.json:", error.message);
-    return [];
-  }
+  return dataStore.readUsers();
 }
 
 function writeUsers(users) {
-  fs.writeFileSync(usersDbPath, JSON.stringify(users, null, 2), "utf-8");
+  dataStore.writeUsers(users);
 }
 
 function removeUserByTelegramId(targetTelegramId, actorTelegramId) {
@@ -110,114 +105,53 @@ function removeUserByTelegramId(targetTelegramId, actorTelegramId) {
 }
 
 function findUser(telegramId) {
-  const users = readUsers();
-  return users.find((user) => user.telegramId === telegramId);
+  return dataStore.findUser(telegramId);
 }
 
 function getAdmins() {
-  const users = readUsers();
-  return users.filter((user) => user.role === "ADMIN");
+  return dataStore.getAdmins();
 }
 
 function registerUser(telegramUser, role, extraData = {}) {
-  const users = readUsers();
-  const exists = users.find((user) => user.telegramId === telegramUser.id);
-
-  if (exists) {
-    return exists;
-  }
-
-  const newUser = {
-    telegramId: telegramUser.id,
-    username: telegramUser.username || null,
-    firstName: telegramUser.first_name || null,
-    lastName: telegramUser.last_name || null,
-    role,
-    fullName: extraData.fullName || null,
-    organization: extraData.organization || null,
-    registeredAt: new Date().toISOString()
-  };
-
-  users.push(newUser);
-  writeUsers(users);
-
-  return newUser;
+  return dataStore.registerUser(telegramUser, role, extraData);
 }
 
 function readRequests() {
-  if (!fs.existsSync(requestsDbPath)) {
-    return [];
-  }
-
-  try {
-    const content = fs.readFileSync(requestsDbPath, "utf-8");
-    return JSON.parse(content);
-  } catch (error) {
-    console.error("Cannot read requests.json:", error.message);
-    return [];
-  }
+  return dataStore.readRequests();
 }
 
 function writeRequests(requests) {
-  fs.writeFileSync(requestsDbPath, JSON.stringify(requests, null, 2), "utf-8");
+  dataStore.writeRequests(requests);
 }
 
 function readSuggestions() {
-  if (!fs.existsSync(suggestionsDbPath)) {
-    return [];
-  }
-
-  try {
-    const content = fs.readFileSync(suggestionsDbPath, "utf-8");
-    return JSON.parse(content);
-  } catch (error) {
-    console.error("Cannot read suggestions.json:", error.message);
-    return [];
-  }
+  return dataStore.readSuggestions();
 }
 
 function writeSuggestions(suggestions) {
-  fs.writeFileSync(suggestionsDbPath, JSON.stringify(suggestions, null, 2), "utf-8");
+  dataStore.writeSuggestions(suggestions);
 }
 
 function readMessages() {
-  if (!fs.existsSync(messagesDbPath)) {
-    return [];
-  }
-
-  try {
-    const content = fs.readFileSync(messagesDbPath, "utf-8");
-    return JSON.parse(content);
-  } catch (error) {
-    console.error("Cannot read messages.json:", error.message);
-    return [];
-  }
+  return dataStore.readMessages();
 }
 
 function writeMessages(messages) {
-  fs.writeFileSync(messagesDbPath, JSON.stringify(messages, null, 2), "utf-8");
+  dataStore.writeMessages(messages);
 }
 
-function createRequestMessage(requestId, senderRole, senderTelegramId, text) {
-  const messages = readMessages();
-  const lastId = messages.length ? messages[messages.length - 1].id : 0;
-  const newMessage = {
-    id: lastId + 1,
+function createRequestMessage(requestId, senderRole, senderTelegramId, text, attachment = null) {
+  return dataStore.createRequestMessage(
     requestId,
     senderRole,
     senderTelegramId,
     text,
-    createdAt: new Date().toISOString()
-  };
-  messages.push(newMessage);
-  writeMessages(messages);
-  return newMessage;
+    attachment
+  );
 }
 
 function getRequestMessages(requestId) {
-  return readMessages()
-    .filter((message) => message.requestId === requestId)
-    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  return dataStore.getRequestMessages(requestId);
 }
 
 function setTypingSignal(requestId, role, telegramId) {
@@ -268,46 +202,11 @@ function resolveWebAppUrl(telegramId) {
 }
 
 function createSuggestion(telegramUser, userProfile, text) {
-  const suggestions = readSuggestions();
-  const lastId = suggestions.length ? suggestions[suggestions.length - 1].id : 0;
-  const suggestion = {
-    id: lastId + 1,
-    userTelegramId: telegramUser.id,
-    username: telegramUser.username || null,
-    fullName:
-      userProfile?.fullName ||
-      [telegramUser.first_name, telegramUser.last_name].filter(Boolean).join(" ").trim() ||
-      null,
-    organization: userProfile?.organization || null,
-    text,
-    createdAt: new Date().toISOString()
-  };
-
-  suggestions.push(suggestion);
-  writeSuggestions(suggestions);
-  return suggestion;
+  return dataStore.createSuggestion(telegramUser, userProfile, text);
 }
 
-function createRequest(fromUser, text) {
-  const requests = readRequests();
-  const lastId = requests.length ? requests[requests.length - 1].id : 0;
-  const newRequest = {
-    id: lastId + 1,
-    userTelegramId: fromUser.id,
-    userUsername: fromUser.username || null,
-    userFirstName: fromUser.first_name || null,
-    userLastName: fromUser.last_name || null,
-    text,
-    status: "NEW",
-    createdAt: new Date().toISOString(),
-    inProgressAt: null,
-    completedAt: null,
-    assignedAdminTelegramId: null
-  };
-
-  requests.push(newRequest);
-  writeRequests(requests);
-  return newRequest;
+function createRequest(fromUser, text, meta = {}) {
+  return dataStore.createRequest(fromUser, text, meta);
 }
 
 function getPendingRequests() {
@@ -478,6 +377,9 @@ async function notifyAdminsOfRequest(ctx, request) {
 
   let deliveredCount = 0;
   for (const admin of admins) {
+    if (!canSendTelegramNotification(admin.telegramId, "adminNewRequest")) {
+      continue;
+    }
     try {
       await bot.telegram.sendMessage(admin.telegramId, message);
       deliveredCount += 1;
@@ -509,6 +411,9 @@ async function notifyAdminsOfSuggestion(suggestion) {
 
   let deliveredCount = 0;
   for (const admin of admins) {
+    if (!canSendTelegramNotification(admin.telegramId, "adminSuggestion")) {
+      continue;
+    }
     try {
       await bot.telegram.sendMessage(admin.telegramId, message);
       deliveredCount += 1;
@@ -554,6 +459,9 @@ async function notifyAdminsOfRequestFromUser(user, request) {
 
   let deliveredCount = 0;
   for (const admin of admins) {
+    if (!canSendTelegramNotification(admin.telegramId, "adminNewRequest")) {
+      continue;
+    }
     try {
       await bot.telegram.sendMessage(admin.telegramId, message);
       deliveredCount += 1;
@@ -570,6 +478,28 @@ function parseTelegramId(value) {
     return null;
   }
   return id;
+}
+
+function parseOptionalBoolean(value) {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  const normalized = String(value).trim().toLowerCase();
+  if (["1", "true", "yes", "on"].includes(normalized)) return true;
+  if (["0", "false", "no", "off"].includes(normalized)) return false;
+  return undefined;
+}
+
+function getNotificationSettings(telegramId) {
+  return dataStore.getUserNotificationSettings(telegramId);
+}
+
+function updateNotificationSettings(telegramId, patch) {
+  return dataStore.upsertUserNotificationSettings(telegramId, patch);
+}
+
+function canSendTelegramNotification(telegramId, key) {
+  return dataStore.isTelegramNotificationEnabled(telegramId, key);
 }
 
 bot.start(async (ctx) => {
@@ -701,6 +631,9 @@ bot.on("text", async (ctx) => {
 
       const activeRequest = findUserActiveRequest(ctx.from.id);
       if (activeRequest && activeRequest.assignedAdminTelegramId) {
+        if (!canSendTelegramNotification(activeRequest.assignedAdminTelegramId, "adminChatMessage")) {
+          return;
+        }
         try {
           await bot.telegram.sendMessage(
             activeRequest.assignedAdminTelegramId,
@@ -865,16 +798,18 @@ bot.on("text", async (ctx) => {
         session.activeDialogRequestId = updatedRequest.id;
         clearSessionStep(ctx.from.id);
 
-        try {
-          await bot.telegram.sendMessage(
-            updatedRequest.userTelegramId,
-            `Ваша заявка #${updatedRequest.id} принята в работу администратором.`
-          );
-        } catch (error) {
-          console.error(
-            `Cannot notify user ${updatedRequest.userTelegramId} about IN_PROGRESS:`,
-            error.message
-          );
+        if (canSendTelegramNotification(updatedRequest.userTelegramId, "userRequestTaken")) {
+          try {
+            await bot.telegram.sendMessage(
+              updatedRequest.userTelegramId,
+              `Ваша заявка #${updatedRequest.id} принята в работу администратором.`
+            );
+          } catch (error) {
+            console.error(
+              `Cannot notify user ${updatedRequest.userTelegramId} about IN_PROGRESS:`,
+              error.message
+            );
+          }
         }
 
         await ctx.reply(
@@ -956,16 +891,18 @@ bot.on("text", async (ctx) => {
           registrationSessions.set(ctx.from.id, session);
         }
 
-        try {
-          await bot.telegram.sendMessage(
-            updatedRequest.userTelegramId,
-            "Администратор завершил работу. Спасибо за обращение!"
-          );
-        } catch (error) {
-          console.error(
-            `Cannot notify user ${updatedRequest.userTelegramId} about COMPLETED:`,
-            error.message
-          );
+        if (canSendTelegramNotification(updatedRequest.userTelegramId, "userRequestCompleted")) {
+          try {
+            await bot.telegram.sendMessage(
+              updatedRequest.userTelegramId,
+              "Администратор завершил работу. Спасибо за обращение!"
+            );
+          } catch (error) {
+            console.error(
+              `Cannot notify user ${updatedRequest.userTelegramId} about COMPLETED:`,
+              error.message
+            );
+          }
         }
 
         await ctx.reply(`Заявка #${updatedRequest.id} завершена.`, adminMenuKeyboard());
@@ -989,20 +926,22 @@ bot.on("text", async (ctx) => {
           return;
         }
 
-        try {
-          await bot.telegram.sendMessage(
-            request.userTelegramId,
-            [`Сообщение администратора по заявке #${request.id}:`, "", text].join("\n")
-          );
-        } catch (error) {
-          console.error(
-            `Cannot deliver admin message to user ${request.userTelegramId}:`,
-            error.message
-          );
-          await ctx.reply(
-            "Не удалось отправить сообщение пользователю.",
-            adminMenuKeyboard()
-          );
+        if (canSendTelegramNotification(request.userTelegramId, "userChatMessage")) {
+          try {
+            await bot.telegram.sendMessage(
+              request.userTelegramId,
+              [`Сообщение администратора по заявке #${request.id}:`, "", text].join("\n")
+            );
+          } catch (error) {
+            console.error(
+              `Cannot deliver admin message to user ${request.userTelegramId}:`,
+              error.message
+            );
+            await ctx.reply(
+              "Не удалось отправить сообщение пользователю.",
+              adminMenuKeyboard()
+            );
+          }
         }
         return;
       }
@@ -1090,8 +1029,13 @@ function getUserFromRequest(req) {
 }
 
 function mapRequestForClient(request) {
+  const isOverdue =
+    Boolean(request.slaDueAt) &&
+    request.status !== "COMPLETED" &&
+    new Date(request.slaDueAt).getTime() < Date.now();
   return {
     ...request,
+    isOverdue,
     canOpenDialog: request.status === "IN_PROGRESS"
   };
 }
@@ -1121,6 +1065,7 @@ api.get("/api/bootstrap", (req, res) => {
     registered: Boolean(user),
     user: user || null,
     role: user?.role || null,
+    notificationSettings: user ? getNotificationSettings(user.telegramId) : null,
     instructions: instructionKeys
       .filter((item) => fs.existsSync(instructionFilePath(item.key)))
       .map((item) => ({
@@ -1164,7 +1109,8 @@ api.get("/api/bootstrap", (req, res) => {
       .sort((a, b) => b.id - a.id);
     payload.stats = {
       open: payload.requests.filter((item) => item.status === "NEW").length,
-      inProgress: payload.requests.filter((item) => item.status === "IN_PROGRESS").length
+      inProgress: payload.requests.filter((item) => item.status === "IN_PROGRESS").length,
+      overdue: payload.requests.filter((item) => item.isOverdue).length
     };
   }
 
@@ -1200,6 +1146,35 @@ api.post("/api/register", (req, res) => {
   );
 
   return res.status(201).json({ user });
+});
+
+api.get("/api/me/notification-settings", (req, res) => {
+  const user = getUserFromRequest(req);
+  if (!user) {
+    return res.status(401).json({ error: "User is not registered" });
+  }
+  return res.json({ settings: getNotificationSettings(user.telegramId) });
+});
+
+api.put("/api/me/notification-settings", (req, res) => {
+  const user = getUserFromRequest(req);
+  if (!user) {
+    return res.status(401).json({ error: "User is not registered" });
+  }
+  const payload = req.body || {};
+  const patch = {
+    adminNewRequest: parseOptionalBoolean(payload.adminNewRequest),
+    adminSuggestion: parseOptionalBoolean(payload.adminSuggestion),
+    userRequestTaken: parseOptionalBoolean(payload.userRequestTaken),
+    userRequestCompleted: parseOptionalBoolean(payload.userRequestCompleted),
+    userChatMessage: parseOptionalBoolean(payload.userChatMessage),
+    adminChatMessage: parseOptionalBoolean(payload.adminChatMessage)
+  };
+  const filteredPatch = Object.fromEntries(
+    Object.entries(patch).filter(([, value]) => value !== undefined)
+  );
+  const settings = updateNotificationSettings(user.telegramId, filteredPatch);
+  return res.json({ settings });
 });
 
 api.delete("/api/users/:telegramId", (req, res) => {
@@ -1240,6 +1215,9 @@ api.delete("/api/users/:telegramId", (req, res) => {
 api.post("/api/requests", async (req, res) => {
   const user = getUserFromRequest(req);
   const text = String(req.body?.text || "").trim();
+  const priority = dataStore.parsePriority(req.body?.priority);
+  const slaHoursRaw = Number(req.body?.slaHours);
+  const slaHours = Number.isFinite(slaHoursRaw) && slaHoursRaw > 0 ? slaHoursRaw : undefined;
   if (!user) {
     return res.status(401).json({ error: "User is not registered" });
   }
@@ -1247,7 +1225,7 @@ api.post("/api/requests", async (req, res) => {
     return res.status(400).json({ error: "text is required" });
   }
 
-  const request = createRequest(toTelegramFromUser(user), text);
+  const request = createRequest(toTelegramFromUser(user), text, { priority, slaHours });
   const deliveredCount = await notifyAdminsOfRequestFromUser(user, request);
 
   return res.status(201).json({
@@ -1319,13 +1297,15 @@ api.post("/api/requests/:id/messages", async (req, res) => {
       return res.status(403).json({ error: "Access denied" });
     }
     if (MINIAPP_FORWARD_TO_TELEGRAM) {
-      try {
-        await bot.telegram.sendMessage(
-          request.assignedAdminTelegramId,
-          [`Сообщение от пользователя по заявке #${request.id}:`, "", text].join("\n")
-        );
-      } catch (error) {
-        return res.status(502).json({ error: "Cannot deliver message to admin now" });
+      if (canSendTelegramNotification(request.assignedAdminTelegramId, "adminChatMessage")) {
+        try {
+          await bot.telegram.sendMessage(
+            request.assignedAdminTelegramId,
+            [`Сообщение от пользователя по заявке #${request.id}:`, "", text].join("\n")
+          );
+        } catch (error) {
+          return res.status(502).json({ error: "Cannot deliver message to admin now" });
+        }
       }
     }
   } else if (user.role === "ADMIN") {
@@ -1333,13 +1313,15 @@ api.post("/api/requests/:id/messages", async (req, res) => {
       return res.status(403).json({ error: "Request is assigned to another admin" });
     }
     if (MINIAPP_FORWARD_TO_TELEGRAM) {
-      try {
-        await bot.telegram.sendMessage(
-          request.userTelegramId,
-          [`Сообщение администратора по заявке #${request.id}:`, "", text].join("\n")
-        );
-      } catch (error) {
-        return res.status(502).json({ error: "Cannot deliver message to user now" });
+      if (canSendTelegramNotification(request.userTelegramId, "userChatMessage")) {
+        try {
+          await bot.telegram.sendMessage(
+            request.userTelegramId,
+            [`Сообщение администратора по заявке #${request.id}:`, "", text].join("\n")
+          );
+        } catch (error) {
+          return res.status(502).json({ error: "Cannot deliver message to user now" });
+        }
       }
     }
   } else {
@@ -1348,6 +1330,60 @@ api.post("/api/requests/:id/messages", async (req, res) => {
 
   clearTypingSignal(request.id, user.telegramId);
   const message = createRequestMessage(request.id, user.role, user.telegramId, text);
+  return res.status(201).json({ message });
+});
+
+api.post("/api/requests/:id/messages/upload", upload.single("file"), (req, res) => {
+  const user = getUserFromRequest(req);
+  if (!user) {
+    if (req.file?.path) {
+      fs.rmSync(req.file.path, { force: true });
+    }
+    return res.status(401).json({ error: "User is not registered" });
+  }
+  const requestId = Number(req.params.id);
+  if (!Number.isInteger(requestId) || requestId <= 0) {
+    if (req.file?.path) {
+      fs.rmSync(req.file.path, { force: true });
+    }
+    return res.status(400).json({ error: "Invalid request id" });
+  }
+  const request = findRequestById(requestId);
+  if (!request || request.status !== "IN_PROGRESS") {
+    if (req.file?.path) {
+      fs.rmSync(req.file.path, { force: true });
+    }
+    return res.status(404).json({ error: "Request not available for upload" });
+  }
+  if (user.role === "USER" && request.userTelegramId !== user.telegramId) {
+    if (req.file?.path) {
+      fs.rmSync(req.file.path, { force: true });
+    }
+    return res.status(403).json({ error: "Access denied" });
+  }
+  if (user.role === "ADMIN" && request.assignedAdminTelegramId !== user.telegramId) {
+    if (req.file?.path) {
+      fs.rmSync(req.file.path, { force: true });
+    }
+    return res.status(403).json({ error: "Access denied" });
+  }
+  if (!req.file) {
+    return res.status(400).json({ error: "file is required" });
+  }
+
+  const attachment = {
+    path: `/uploads/${path.basename(req.file.path)}`,
+    name: req.file.originalname || path.basename(req.file.path),
+    mime: req.file.mimetype || "application/octet-stream"
+  };
+  const message = createRequestMessage(
+    request.id,
+    user.role,
+    user.telegramId,
+    `[Вложение] ${attachment.name}`,
+    attachment
+  );
+  clearTypingSignal(request.id, user.telegramId);
   return res.status(201).json({ message });
 });
 
@@ -1405,16 +1441,18 @@ api.post("/api/requests/:id/take", async (req, res) => {
   }
 
   const updatedRequest = takeRequestInWork(requestId, user.telegramId);
-  try {
-    await bot.telegram.sendMessage(
-      updatedRequest.userTelegramId,
-      `Ваша заявка #${updatedRequest.id} принята в работу администратором.`
-    );
-  } catch (error) {
-    console.error(
-      `Cannot notify user ${updatedRequest.userTelegramId} about IN_PROGRESS:`,
-      error.message
-    );
+  if (canSendTelegramNotification(updatedRequest.userTelegramId, "userRequestTaken")) {
+    try {
+      await bot.telegram.sendMessage(
+        updatedRequest.userTelegramId,
+        `Ваша заявка #${updatedRequest.id} принята в работу администратором.`
+      );
+    } catch (error) {
+      console.error(
+        `Cannot notify user ${updatedRequest.userTelegramId} about IN_PROGRESS:`,
+        error.message
+      );
+    }
   }
 
   return res.json({ request: updatedRequest });
@@ -1442,16 +1480,18 @@ api.post("/api/requests/:id/finish", async (req, res) => {
   }
 
   const updatedRequest = completeRequest(requestId);
-  try {
-    await bot.telegram.sendMessage(
-      updatedRequest.userTelegramId,
-      "Администратор завершил работу. Спасибо за обращение!"
-    );
-  } catch (error) {
-    console.error(
-      `Cannot notify user ${updatedRequest.userTelegramId} about COMPLETED:`,
-      error.message
-    );
+  if (canSendTelegramNotification(updatedRequest.userTelegramId, "userRequestCompleted")) {
+    try {
+      await bot.telegram.sendMessage(
+        updatedRequest.userTelegramId,
+        "Администратор завершил работу. Спасибо за обращение!"
+      );
+    } catch (error) {
+      console.error(
+        `Cannot notify user ${updatedRequest.userTelegramId} about COMPLETED:`,
+        error.message
+      );
+    }
   }
 
   return res.json({ request: updatedRequest });
@@ -1488,6 +1528,8 @@ api.get("/api/instructions/:key", (req, res) => {
   }
   return res.sendFile(filePath);
 });
+
+api.use("/uploads", express.static(UPLOADS_DIR));
 
 const apiServer = api.listen(API_PORT, () => {
   console.log(`Mini App API started on port ${API_PORT}`);

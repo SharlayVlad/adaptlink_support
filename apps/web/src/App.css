@@ -169,7 +169,7 @@ textarea.field {
 
 .kpis {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
   gap: 10px;
 }
 
@@ -467,6 +467,19 @@ textarea.field {
   background: rgba(255, 255, 255, 0.04);
 }
 
+.settings-list {
+  display: grid;
+  gap: 8px;
+}
+
+.setting-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text);
+}
+
 .bottom-nav {
   position: fixed;
   left: 50%;
@@ -659,6 +672,18 @@ textarea.field {
   word-break: break-word;
 }
 
+.chat-attachment {
+  display: inline-block;
+  margin-top: 6px;
+  color: var(--accent-line);
+  text-decoration: none;
+  border-bottom: 1px dashed currentColor;
+}
+
+.chat-attachment.outgoing {
+  color: rgba(255, 255, 255, 0.92);
+}
+
 .chat-msg.outgoing {
   color: #fff;
   border-color: transparent;
@@ -771,4 +796,38 @@ textarea.field {
   width: 17px;
   height: 17px;
   stroke: currentColor;
+}
+
+.hidden-file-input {
+  display: none;
+}
+
+.toast-wrap {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 70;
+  display: grid;
+  gap: 8px;
+  width: min(520px, calc(100% - 20px));
+  pointer-events: none;
+}
+
+.toast {
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--glass);
+  padding: 10px 12px;
+  color: var(--text);
+  box-shadow: var(--shadow);
+  font-size: 13px;
+}
+
+.toast-success {
+  border-color: rgba(44, 207, 150, 0.45);
+}
+
+.toast-error {
+  border-color: rgba(255, 111, 145, 0.48);
 }

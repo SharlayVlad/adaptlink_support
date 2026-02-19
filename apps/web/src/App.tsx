@@ -29,6 +29,9 @@ type SupportRequest = {
   userTelegramId: number
   text: string
   status: RequestStatus
+  priority?: 'LOW' | 'MEDIUM' | 'HIGH'
+  slaDueAt?: string | null
+  isOverdue?: boolean
   createdAt: string
   inProgressAt: string | null
   completedAt: string | null
@@ -56,6 +59,9 @@ type RequestMessage = {
   senderRole: Role
   senderTelegramId: number
   text: string
+  attachmentPath?: string | null
+  attachmentName?: string | null
+  attachmentMime?: string | null
   createdAt: string
 }
 
@@ -87,7 +93,19 @@ type BootstrapPayload = {
   stats?: {
     open: number
     inProgress: number
+    overdue?: number
   }
+  notificationSettings?: NotificationSettings | null
+}
+
+type NotificationSettings = {
+  telegramId: number
+  adminNewRequest: boolean
+  adminSuggestion: boolean
+  userRequestTaken: boolean
+  userRequestCompleted: boolean
+  userChatMessage: boolean
+  adminChatMessage: boolean
 }
 
 declare global {
@@ -205,6 +223,8 @@ function App() {
   const [chatStatus, setChatStatus] = useState<RequestStatus>('IN_PROGRESS')
   const [chatMessages, setChatMessages] = useState<RequestMessage[]>([])
   const [chatText, setChatText] = useState('')
+  const [notificationSettings, setNotificationSettings] = useState<NotificationSettings | null>(null)
+  const [toasts, setToasts] = useState<Array<{ id: number; text: string; tone: 'success' | 'error' | 'neutral' }>>([])
   const [regName, setRegName] = useState('')
   const [regOrg, setRegOrg] = useState('')
   const [requestTopic, setRequestTopic] = useState('')
@@ -215,6 +235,7 @@ function App() {
   const [deletingUserId, setDeletingUserId] = useState<number | null>(null)
   const [bootstrapLoaded, setBootstrapLoaded] = useState(false)
   const typingPingAtRef = useRef(0)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
   const tgUser = tg?.initDataUnsafe?.user || null
   const telegramId = tgUser?.id || Number(params.get('telegramId')) || null
 
@@ -247,6 +268,7 @@ function App() {
     }
     const data = await api<BootstrapPayload>(`/api/bootstrap?telegramId=${telegramId}`, telegramId)
     setBootstrap(data)
+    setNotificationSettings(data.notificationSettings || null)
     setBootstrapLoaded(true)
   }, [telegramId])
 
@@ -256,6 +278,21 @@ function App() {
     }, 0)
     return () => window.clearTimeout(timer)
   }, [loadBootstrap])
+
+  useEffect(() => {
+    if (!status || status === 'Готово.') return
+    const tone: 'success' | 'error' | 'neutral' = /ошиб|error|не удалось/i.test(status)
+      ? 'error'
+      : /успеш|отправ|выполн|принят|заверш|удален|сохран/i.test(status)
+        ? 'success'
+        : 'neutral'
+    const id = Date.now() + Math.floor(Math.random() * 1000)
+    setToasts((prev) => [...prev.slice(-2), { id, text: status, tone }])
+    const timer = window.setTimeout(() => {
+      setToasts((prev) => prev.filter((item) => item.id !== id))
+    }, 2800)
+    return () => window.clearTimeout(timer)
+  }, [status])
 
   const refreshChat = useCallback(async (scroll = false, showLoader = false, forcedRequestId?: number) => {
     const requestId = forcedRequestId || chatRequestId
@@ -348,6 +385,15 @@ function App() {
 
   async function sendChatMessage() {
     if (!chatRequestId || !chatText.trim()) return
+    const optimistic: RequestMessage = {
+      id: -Date.now(),
+      requestId: chatRequestId,
+      senderRole: isAdmin ? 'ADMIN' : 'USER',
+      senderTelegramId: telegramId || 0,
+      text: chatText.trim(),
+      createdAt: new Date().toISOString(),
+    }
+    setChatMessages((prev) => [...prev, optimistic])
     await api(`/api/requests/${chatRequestId}/messages`, telegramId, { method: 'POST', body: { text: chatText.trim() } })
     setChatText('')
     await refreshChat(true)
@@ -359,6 +405,34 @@ function App() {
     if (now - typingPingAtRef.current < 1200) return
     typingPingAtRef.current = now
     await api(`/api/requests/${chatRequestId}/typing`, telegramId, { method: 'POST' })
+  }
+
+  async function uploadAttachment(file: File) {
+    if (!chatRequestId || !telegramId) return
+    const formData = new FormData()
+    formData.append('file', file)
+    const res = await fetch(`${API_BASE}/api/requests/${chatRequestId}/messages/upload`, {
+      method: 'POST',
+      headers: {
+        'x-telegram-id': String(telegramId),
+      },
+      body: formData,
+    })
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as { error?: string }
+      throw new Error(body.error || `HTTP ${res.status}`)
+    }
+    await refreshChat(true)
+  }
+
+  async function saveNotificationSettings(patch: Partial<NotificationSettings>) {
+    const data = await api<{ settings: NotificationSettings }>(
+      '/api/me/notification-settings',
+      telegramId,
+      { method: 'PUT', body: patch }
+    )
+    setNotificationSettings(data.settings)
+    setStatus('Настройки уведомлений сохранены.')
   }
 
   function openChat(requestId: number) {
@@ -499,6 +573,13 @@ function App() {
                       В работе
                     </div>
                     <div className="kpi-value">{bootstrap?.stats?.inProgress || 0}</div>
+                  </div>
+                  <div className="kpi">
+                    <div className="kpi-head">
+                      <span className="kpi-dot" dangerouslySetInnerHTML={{ __html: icon('spark') }} />
+                      Просрочено (SLA)
+                    </div>
+                    <div className="kpi-value">{bootstrap?.stats?.overdue || 0}</div>
                   </div>
                 </div>
                 <div className="item" id="request-form">
@@ -654,6 +735,96 @@ function App() {
                   <div className="muted">ID: {bootstrap?.user?.telegramId || '-'}</div>
                 </div>
 
+                <div className="item">
+                  <h3 className="section-title">Telegram-уведомления</h3>
+                  {notificationSettings ? (
+                    <div className="settings-list">
+                      {isAdmin && (
+                        <>
+                          <label className="setting-row">
+                            <input
+                              type="checkbox"
+                              checked={notificationSettings.adminNewRequest}
+                              onChange={(e) =>
+                                saveNotificationSettings({ adminNewRequest: e.target.checked }).catch((err: Error) =>
+                                  setStatus(err.message)
+                                )
+                              }
+                            />
+                            Новые заявки
+                          </label>
+                          <label className="setting-row">
+                            <input
+                              type="checkbox"
+                              checked={notificationSettings.adminSuggestion}
+                              onChange={(e) =>
+                                saveNotificationSettings({ adminSuggestion: e.target.checked }).catch((err: Error) =>
+                                  setStatus(err.message)
+                                )
+                              }
+                            />
+                            Новые предложения
+                          </label>
+                          <label className="setting-row">
+                            <input
+                              type="checkbox"
+                              checked={notificationSettings.adminChatMessage}
+                              onChange={(e) =>
+                                saveNotificationSettings({ adminChatMessage: e.target.checked }).catch((err: Error) =>
+                                  setStatus(err.message)
+                                )
+                              }
+                            />
+                            Сообщения пользователей в чате
+                          </label>
+                        </>
+                      )}
+                      {!isAdmin && (
+                        <>
+                          <label className="setting-row">
+                            <input
+                              type="checkbox"
+                              checked={notificationSettings.userRequestTaken}
+                              onChange={(e) =>
+                                saveNotificationSettings({ userRequestTaken: e.target.checked }).catch((err: Error) =>
+                                  setStatus(err.message)
+                                )
+                              }
+                            />
+                            Заявка принята в работу
+                          </label>
+                          <label className="setting-row">
+                            <input
+                              type="checkbox"
+                              checked={notificationSettings.userRequestCompleted}
+                              onChange={(e) =>
+                                saveNotificationSettings({ userRequestCompleted: e.target.checked }).catch((err: Error) =>
+                                  setStatus(err.message)
+                                )
+                              }
+                            />
+                            Заявка завершена
+                          </label>
+                          <label className="setting-row">
+                            <input
+                              type="checkbox"
+                              checked={notificationSettings.userChatMessage}
+                              onChange={(e) =>
+                                saveNotificationSettings({ userChatMessage: e.target.checked }).catch((err: Error) =>
+                                  setStatus(err.message)
+                                )
+                              }
+                            />
+                            Сообщения администратора в чате
+                          </label>
+                        </>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="muted">Настройки будут доступны после загрузки профиля.</p>
+                  )}
+                </div>
+
                 {isAdmin && (
                   <div className="item">
                     <h3 className="section-title">Зарегистрированные пользователи</h3>
@@ -798,6 +969,14 @@ function App() {
         </nav>
       )}
 
+      <section className="toast-wrap" aria-live="polite">
+        {toasts.map((toast) => (
+          <div key={toast.id} className={`toast toast-${toast.tone}`}>
+            {toast.text}
+          </div>
+        ))}
+      </section>
+
       {chatRequestId && (
         <section className="chat-overlay">
           <div className="chat-header">
@@ -825,6 +1004,16 @@ function App() {
                   {!outgoing && <span className="chat-avatar">AS</span>}
                   <div className={`chat-msg ${outgoing ? 'outgoing' : ''}`}>
                     <div>{message.text}</div>
+                    {message.attachmentPath && (
+                      <a
+                        className={`chat-attachment ${outgoing ? 'outgoing' : ''}`}
+                        href={`${API_BASE}${message.attachmentPath}`}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        {message.attachmentName || 'Вложение'}
+                      </a>
+                    )}
                     <div className="muted">{formatDate(message.createdAt)}</div>
                   </div>
                 </div>
@@ -854,7 +1043,11 @@ function App() {
           </div>
           <div className="chat-footer">
             <div className="chat-input-row">
-              <button className="icon-btn" dangerouslySetInnerHTML={{ __html: icon('attach') }} />
+              <button
+                className="icon-btn"
+                onClick={() => fileInputRef.current?.click()}
+                dangerouslySetInnerHTML={{ __html: icon('attach') }}
+              />
               <input
                 className="field"
                 placeholder="Введите сообщение..."
@@ -879,6 +1072,21 @@ function App() {
                 dangerouslySetInnerHTML={{ __html: icon('send') }}
               />
             </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              className="hidden-file-input"
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (!file) return
+                void uploadAttachment(file)
+                  .then(() => setStatus('Вложение отправлено.'))
+                  .catch((err: Error) => setStatus(err.message))
+                  .finally(() => {
+                    e.currentTarget.value = ''
+                  })
+              }}
+            />
           </div>
         </section>
       )}
