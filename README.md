@@ -61,7 +61,8 @@ npm start
 ## Структура
 
 - `index.js` - логика бота
-- `webapp/index.html` - полноценный фронтенд Telegram Mini App
+- `apps/web/` - новый фронтенд Telegram Mini App (React + TypeScript + Vite)
+- `webapp/index.html` - старая версия Mini App (legacy)
 - `deploy/nginx/adaptlink-api.conf.example` - шаблон nginx-конфига для API
 - `users.json` - база зарегистрированных пользователей (создается автоматически)
 - `requests.json` - список заявок пользователей (создается автоматически)
@@ -112,3 +113,41 @@ MINIAPP_FORWARD_TO_TELEGRAM=false
 pm2 restart adaptlink-bot
 pm2 logs adaptlink-bot --lines 100
 ```
+
+## Деплой Mini App (Vercel, apps/web)
+
+Переключаем прод-деплой Mini App на React-версию из `apps/web`.
+
+1. Войти в Vercel (один раз):
+
+```bash
+vercel login
+```
+
+2. Задеплоить прод из папки `apps/web`:
+
+```bash
+cd apps/web
+vercel --prod
+```
+
+3. Скопировать выданный `Production URL` и вставить его в `.env` на сервере:
+
+```env
+WEB_APP_URL=https://your-new-miniapp.vercel.app
+API_BASE_URL=https://your-api-domain.example.com
+API_CORS_ORIGINS=https://your-new-miniapp.vercel.app
+MINIAPP_FORWARD_TO_TELEGRAM=false
+```
+
+4. Перезапустить бота на сервере:
+
+```bash
+pm2 restart adaptlink-bot --update-env
+pm2 logs adaptlink-bot --lines 100
+```
+
+5. Проверить:
+- открыть Mini App только через кнопку `Открыть приложение` в боте;
+- в адресе Mini App должен быть параметр `?api=...`;
+- регистрация/заявки/чат/админ-пользователи должны работать как раньше.

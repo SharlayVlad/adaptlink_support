@@ -170,17 +170,18 @@ function getRequestMessages(requestId) {
     .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 }
 
-function resolveWebAppUrl() {
-  if (!API_BASE_URL) {
-    return WEB_APP_URL;
-  }
-
+function resolveWebAppUrl(telegramId) {
   try {
     const url = new URL(WEB_APP_URL);
-    url.searchParams.set("api", API_BASE_URL);
+    if (API_BASE_URL) {
+      url.searchParams.set("api", API_BASE_URL);
+    }
+    if (telegramId) {
+      url.searchParams.set("telegramId", String(telegramId));
+    }
     return url.toString();
   } catch (error) {
-    console.error("Cannot compose WEB_APP_URL with API_BASE_URL:", error.message);
+    console.error("Cannot compose WEB_APP_URL:", error.message);
     return WEB_APP_URL;
   }
 }
@@ -306,9 +307,9 @@ function adminMenuKeyboard() {
   ]).resize();
 }
 
-function openWebAppKeyboard() {
+function openWebAppKeyboard(telegramId) {
   return Markup.inlineKeyboard([
-    [Markup.button.webApp("Открыть Mini App", resolveWebAppUrl())]
+    [Markup.button.webApp("Открыть Mini App", resolveWebAppUrl(telegramId))]
   ]);
 }
 
@@ -558,7 +559,7 @@ bot.on("text", async (ctx) => {
       }
 
       if (text === OPEN_WEB_APP_BUTTON) {
-        await ctx.reply("Откройте Mini App:", openWebAppKeyboard());
+        await ctx.reply("Откройте Mini App:", openWebAppKeyboard(ctx.from.id));
         return;
       }
 
@@ -677,7 +678,7 @@ bot.on("text", async (ctx) => {
       }
 
       if (text === OPEN_WEB_APP_BUTTON) {
-        await ctx.reply("Откройте Mini App:", openWebAppKeyboard());
+        await ctx.reply("Откройте Mini App:", openWebAppKeyboard(ctx.from.id));
         return;
       }
 
