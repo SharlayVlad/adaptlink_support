@@ -15,6 +15,15 @@ type UserProfile = {
   registeredAt: string
 }
 
+type DeleteUserResponse = {
+  ok: true
+  removedUser: {
+    telegramId: number
+    role: Role
+  }
+  reopenedRequests: number
+}
+
 type SupportRequest = {
   id: number
   userTelegramId: number
@@ -102,6 +111,9 @@ function icon(id: string): string {
     send: '<svg viewBox="0 0 24 24"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z" fill="none" stroke="currentColor" stroke-width="2"/></svg>',
     attach:
       '<svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M21.4 11.1 13 19.5a5 5 0 0 1-7.1-7.1l9.2-9.2a3.5 3.5 0 0 1 5 5l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"/></svg>',
+    info: '<svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 10v6"/><circle cx="12" cy="7" r="1"/></svg>',
+    trash:
+      '<svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M4 7h16"/><path d="M9 7V5h6v2"/><path d="M7 7l1 12h8l1-12"/><path d="M10 11v5M14 11v5"/></svg>',
   }
   return map[id] || ''
 }
@@ -168,6 +180,8 @@ function App() {
   const [requestDescription, setRequestDescription] = useState('')
   const [requestPriority, setRequestPriority] = useState<'Низкий' | 'Средний' | 'Высокий'>('Средний')
   const [suggestionText, setSuggestionText] = useState('')
+  const [expandedUserId, setExpandedUserId] = useState<number | null>(null)
+  const [deletingUserId, setDeletingUserId] = useState<number | null>(null)
   const [bootstrapLoaded, setBootstrapLoaded] = useState(false)
   const tgUser = tg?.initDataUnsafe?.user || null
   const telegramId = tgUser?.id || Number(params.get('telegramId')) || null
@@ -175,6 +189,12 @@ function App() {
   const role = bootstrap?.role
   const isAdmin = role === 'ADMIN'
   const isRegistered = Boolean(bootstrap?.registered)
+  const missingTelegramContext = bootstrapLoaded && !telegramId
+  const statusTone = /ошиб|error|не удалось/i.test(status)
+    ? 'error'
+    : /готово|успеш|отправ|выполн|принят|заверш/i.test(status)
+      ? 'success'
+      : 'neutral'
 
   useEffect(() => {
     tg?.ready()
@@ -294,6 +314,25 @@ function App() {
     await refreshChat(true)
   }
 
+  async function deleteRegisteredUser(targetUserId: number, displayName: string) {
+    if (!window.confirm(`Удалить пользователя "${displayName}"?`)) return
+    setDeletingUserId(targetUserId)
+    try {
+      const data = await api<DeleteUserResponse>(`/api/users/${targetUserId}`, telegramId, { method: 'DELETE' })
+      const extra =
+        data.reopenedRequests > 0
+          ? ` Переведено в новые заявок: ${data.reopenedRequests}.`
+          : ''
+      setStatus(`Пользователь удален.${extra}`)
+      if (expandedUserId === targetUserId) {
+        setExpandedUserId(null)
+      }
+      await loadBootstrap()
+    } finally {
+      setDeletingUserId(null)
+    }
+  }
+
   const userRequests = (Array.isArray(bootstrap?.requests) ? bootstrap?.requests : []) as SupportRequest[]
   const adminRequests = (!Array.isArray(bootstrap?.requests) ? bootstrap?.requests : undefined) as
     | BootstrapPayload['requests']
@@ -343,7 +382,21 @@ function App() {
 
         {!bootstrapLoaded && (
           <section className="card">
-            <p className="muted">Проверяю авторизацию...</p>
+            <div className="hint-card">
+              <strong>Проверяю авторизацию...</strong>
+              <p className="muted">Подождите пару секунд, загружаю данные профиля.</p>
+            </div>
+          </section>
+        )}
+
+        {missingTelegramContext && (
+          <section className="card">
+            <div className="hint-card">
+              <strong>Не удалось получить Telegram-профиль</strong>
+              <p className="muted">
+                Откройте приложение через кнопку <b>Открыть приложение</b> в боте и перезапустите Mini App.
+              </p>
+            </div>
           </section>
         )}
 
@@ -549,6 +602,39 @@ function App() {
                             </div>
                             <div className="user-meta">ID: {item.telegramId} | {item.username ? `@${item.username}` : 'нет username'}</div>
                             <div className="user-meta">{item.organization || 'организация не указана'}</div>
+                            <div className="user-actions">
+                              <button
+                                className="user-action-btn"
+                                type="button"
+                                title="Подробнее"
+                                onClick={() =>
+                                  setExpandedUserId((prev) => (prev === item.telegramId ? null : item.telegramId))
+                                }
+                                dangerouslySetInnerHTML={{ __html: icon('info') }}
+                              />
+                              <button
+                                className="user-action-btn user-action-btn-danger"
+                                type="button"
+                                title="Удалить пользователя"
+                                disabled={item.telegramId === bootstrap?.user?.telegramId || deletingUserId === item.telegramId}
+                                onClick={() => deleteRegisteredUser(item.telegramId, displayName).catch((e: Error) => setStatus(e.message))}
+                                dangerouslySetInnerHTML={{ __html: icon('trash') }}
+                              />
+                            </div>
+                            {expandedUserId === item.telegramId && (
+                              <div className="user-details">
+                                <div className="user-meta"><strong>Роль:</strong> {item.role}</div>
+                                <div className="user-meta"><strong>ФИО:</strong> {item.fullName || 'не указано'}</div>
+                                <div className="user-meta"><strong>Имя:</strong> {item.firstName || 'не указано'}</div>
+                                <div className="user-meta"><strong>Фамилия:</strong> {item.lastName || 'не указано'}</div>
+                                <div className="user-meta"><strong>Username:</strong> {item.username ? `@${item.username}` : 'нет username'}</div>
+                                <div className="user-meta"><strong>Организация:</strong> {item.organization || 'не указана'}</div>
+                                <div className="user-meta"><strong>Регистрация:</strong> {formatDate(item.registeredAt)}</div>
+                                {item.telegramId === bootstrap?.user?.telegramId && (
+                                  <div className="user-meta">Текущего администратора удалить нельзя.</div>
+                                )}
+                              </div>
+                            )}
                           </div>
                         )
                       })}
@@ -604,9 +690,12 @@ function App() {
         )}
 
         <section className="card">
-          <p id="status" className="muted">
-            {status}
-          </p>
+          <div className={`status-panel status-${statusTone}`}>
+            <span className="status-dot" />
+            <p id="status" className="muted">
+              {status}
+            </p>
+          </div>
         </section>
       </main>
 

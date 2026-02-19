@@ -59,6 +59,54 @@ function writeUsers(users) {
   fs.writeFileSync(usersDbPath, JSON.stringify(users, null, 2), "utf-8");
 }
 
+function removeUserByTelegramId(targetTelegramId, actorTelegramId) {
+  const users = readUsers();
+  const index = users.findIndex((user) => user.telegramId === targetTelegramId);
+  if (index === -1) {
+    return { ok: false, reason: "not_found" };
+  }
+
+  const targetUser = users[index];
+  if (targetUser.telegramId === actorTelegramId) {
+    return { ok: false, reason: "self_delete_forbidden" };
+  }
+
+  if (targetUser.role === "ADMIN") {
+    const admins = users.filter((item) => item.role === "ADMIN");
+    if (admins.length <= 1) {
+      return { ok: false, reason: "last_admin_forbidden" };
+    }
+  }
+
+  users.splice(index, 1);
+  writeUsers(users);
+
+  let reopenedRequests = 0;
+  if (targetUser.role === "ADMIN") {
+    const requests = readRequests();
+    const updatedRequests = requests.map((request) => {
+      if (
+        request.assignedAdminTelegramId === targetUser.telegramId &&
+        request.status === "IN_PROGRESS"
+      ) {
+        reopenedRequests += 1;
+        return {
+          ...request,
+          status: "NEW",
+          assignedAdminTelegramId: null,
+          inProgressAt: null
+        };
+      }
+      return request;
+    });
+    if (reopenedRequests > 0) {
+      writeRequests(updatedRequests);
+    }
+  }
+
+  return { ok: true, removedUser: targetUser, reopenedRequests };
+}
+
 function findUser(telegramId) {
   const users = readUsers();
   return users.find((user) => user.telegramId === telegramId);
@@ -1119,6 +1167,41 @@ api.post("/api/register", (req, res) => {
   );
 
   return res.status(201).json({ user });
+});
+
+api.delete("/api/users/:telegramId", (req, res) => {
+  const actor = getUserFromRequest(req);
+  if (!actor || actor.role !== "ADMIN") {
+    return res.status(403).json({ error: "Only admin can delete users" });
+  }
+
+  const targetTelegramId = parseTelegramId(req.params.telegramId);
+  if (!targetTelegramId) {
+    return res.status(400).json({ error: "Invalid telegramId" });
+  }
+
+  const result = removeUserByTelegramId(targetTelegramId, actor.telegramId);
+  if (!result.ok) {
+    if (result.reason === "not_found") {
+      return res.status(404).json({ error: "User not found" });
+    }
+    if (result.reason === "self_delete_forbidden") {
+      return res.status(409).json({ error: "You cannot delete your own account" });
+    }
+    if (result.reason === "last_admin_forbidden") {
+      return res.status(409).json({ error: "Cannot delete the last admin" });
+    }
+    return res.status(400).json({ error: "Cannot delete user" });
+  }
+
+  return res.json({
+    ok: true,
+    removedUser: {
+      telegramId: result.removedUser.telegramId,
+      role: result.removedUser.role
+    },
+    reopenedRequests: result.reopenedRequests
+  });
 });
 
 api.post("/api/requests", async (req, res) => {

@@ -188,6 +188,41 @@ textarea.field {
   font-size: 12px;
 }
 
+.hint-card {
+  display: grid;
+  gap: 8px;
+  padding: 4px 2px;
+}
+
+.hint-card strong {
+  font-size: 14px;
+}
+
+.status-panel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 2px;
+}
+
+.status-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #9da8bf;
+  box-shadow: 0 0 0 6px rgba(157, 168, 191, 0.14);
+}
+
+.status-success .status-dot {
+  background: #2ccf96;
+  box-shadow: 0 0 0 6px rgba(44, 207, 150, 0.15);
+}
+
+.status-error .status-dot {
+  background: #ff6f91;
+  box-shadow: 0 0 0 6px rgba(255, 111, 145, 0.16);
+}
+
 .status-chip {
   font-size: 11px;
   font-weight: 700;
@@ -251,6 +286,50 @@ textarea.field {
 .user-meta {
   font-size: 12px;
   color: var(--muted);
+}
+
+.user-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.user-action-btn {
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--subtle);
+  color: var(--text);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.user-action-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.user-action-btn svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+}
+
+.user-action-btn-danger {
+  color: #ff6f91;
+  border-color: rgba(255, 111, 145, 0.45);
+}
+
+.user-details {
+  margin-top: 2px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px;
+  display: grid;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .bottom-nav {
